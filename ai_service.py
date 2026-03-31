@@ -22,6 +22,7 @@ class AIService:
 
 請回傳 JSON 格式如下：
 {{
+  "car_number": "偵測到的車號（若未偵測到請留空）",
   "summary": "簡短摘要",
   "missing_info": "追問資訊（若資訊充足請留空）",
   "suggestion": "初步維修建議"

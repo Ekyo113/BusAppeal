@@ -48,9 +48,39 @@ async def handle_text_message(event):
             return
 
         if step == "START":
-            Database.update_user_state(user_id, "GET_CAR_NUMBER", {})
-            reply = "您好！我是品情通報助手。🚌\n請輸入您的「車號」："
-            await line_bot_api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=reply)]))
+            # Try to see if car number + description are in the first message
+            ai_result = await ai_service.analyze_report(text)
+            
+            if ai_result.get("car_number"):
+                # Found car number! Skip to confirmation
+                temp_data["car_number"] = ai_result["car_number"]
+                temp_data["description"] = text
+                temp_data["ai_summary"] = ai_result["summary"]
+                temp_data["missing_info"] = ai_result["missing_info"]
+                temp_data["suggestion"] = ai_result["suggestion"]
+                
+                Database.update_user_state(user_id, "CONFIRM", temp_data)
+                
+                summary_text = f"🤖 偵測到通報資訊：\n\n🚌 車號：{temp_data['car_number']}\n⚠️ 問題：{ai_result['summary']}\n🛠️ 建議：{ai_result['suggestion']}\n"
+                if ai_result["missing_info"]:
+                    summary_text += f"\n❓ 請補充：\n{ai_result['missing_info']}"
+                summary_text += "\n\n請確認是否「送出」？"
+            else:
+                # No car number found, start the normal flow
+                Database.update_user_state(user_id, "GET_CAR_NUMBER", {})
+                summary_text = "您好！我是品情通報助手。🚌\n請輸入您的「車號」："
+
+            quick_reply = None
+            if step != "START" or ai_result.get("car_number"):
+                quick_reply = QuickReply(items=[
+                    QuickReplyItem(action=PostbackAction(label="是，確認送出", data="action=confirm", display_text="確認送出")),
+                    QuickReplyItem(action=PostbackAction(label="否，重新輸入", data="action=cancel", display_text="取消重填"))
+                ])
+
+            await line_bot_api.reply_message(ReplyMessageRequest(
+                reply_token=event.reply_token, 
+                messages=[TextMessage(text=summary_text, quick_reply=quick_reply)]
+            ))
 
         elif step == "GET_CAR_NUMBER":
             temp_data["car_number"] = text
