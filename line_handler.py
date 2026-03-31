@@ -29,7 +29,6 @@ import asyncio
 
 configuration = Configuration(access_token=Config.LINE_CHANNEL_ACCESS_TOKEN)
 parser = WebhookParser(Config.LINE_CHANNEL_SECRET)
-# ai_service = AIService() # AI Disabled as per user request
 
 async def handle_callback(body: str, signature: str):
     try:
@@ -66,20 +65,39 @@ async def handle_text_message(event):
             return
 
         if step == "START":
-            # Step 1: Ask for Car Number
-            Database.update_user_state(user_id, "GET_CAR_NUMBER", {})
-            reply = "您好！開始通報流程。🚌\n\n1. 請輸入您的「車號」："
-            await line_bot_api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=reply)]))
+            # Treat first message as car number
+            temp_data["car_number"] = text
+            Database.update_user_state(user_id, "VERIFY_CAR_NUMBER", temp_data)
+            
+            reply = f"您好！已收到車號：{text}\n請問車號正確嗎？"
+            quick_reply = QuickReply(items=[
+                QuickReplyItem(action=PostbackAction(label="✅ 正確", data="action=car_ok", display_text="正確")),
+                QuickReplyItem(action=PostbackAction(label="❌ 重新輸入", data="action=car_retry", display_text="重新輸入"))
+            ])
+            await line_bot_api.reply_message(ReplyMessageRequest(
+                reply_token=event.reply_token, 
+                messages=[TextMessage(text=reply, quick_reply=quick_reply)]
+            ))
+
+        elif step == "VERIFY_CAR_NUMBER":
+            # If they type instead of clicking button
+            if text in ["正確", "是", "OK"]:
+                await ask_for_description(user_id, temp_data, line_bot_api, event.reply_token)
+            else:
+                await ask_for_car_number_again(user_id, line_bot_api, event.reply_token)
 
         elif step == "GET_CAR_NUMBER":
-            # Step 2: Ask for Description
             temp_data["car_number"] = text
-            Database.update_user_state(user_id, "GET_DESCRIPTION", temp_data)
-            reply = f"好的，車號 {text}。\n\n2. 請輸入「問題描述」："
-            await line_bot_api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=reply)]))
+            Database.update_user_state(user_id, "VERIFY_CAR_NUMBER", temp_data)
+            reply = f"已收到車號：{text}\n請問正確嗎？"
+            quick_reply = QuickReply(items=[
+                QuickReplyItem(action=PostbackAction(label="✅ 正確", data="action=car_ok", display_text="正確")),
+                QuickReplyItem(action=PostbackAction(label="❌ 重新輸入", data="action=car_retry", display_text="重新輸入"))
+            ])
+            await line_bot_api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=reply, quick_reply=quick_reply)]))
 
         elif step == "GET_DESCRIPTION":
-            # Step 3: Ask if Media is needed
+            # Step 2: Ask if Media is needed
             temp_data["description"] = text
             Database.update_user_state(user_id, "GET_MEDIA_PROMPT", temp_data)
             
@@ -94,8 +112,6 @@ async def handle_text_message(event):
             ))
 
         elif step == "WAIT_MEDIA":
-            # If they type something while in media state, treat as done?
-            # Or just ignore
             reply = "請傳送照片或影片。上傳完畢後請點擊下方「預覽並送出」按鈕。"
             quick_reply = QuickReply(items=[
                 QuickReplyItem(action=PostbackAction(label="✅ 預覽並送出", data="action=confirm_preview", display_text="預覽並送出"))
@@ -106,8 +122,17 @@ async def handle_text_message(event):
             ))
 
         elif step == "CONFIRM":
-            # Only if they type instead of clicking button
             await save_and_notify(user_id, temp_data, line_bot_api, event.reply_token)
+
+async def ask_for_description(user_id, temp_data, line_bot_api, reply_token):
+    Database.update_user_state(user_id, "GET_DESCRIPTION", temp_data)
+    reply = f"好的，車號 {temp_data['car_number']} 已確認。\n\n2. 請輸入「問題描述」："
+    await line_bot_api.reply_message(ReplyMessageRequest(reply_token=reply_token, messages=[TextMessage(text=reply)]))
+
+async def ask_for_car_number_again(user_id, line_bot_api, reply_token):
+    Database.update_user_state(user_id, "GET_CAR_NUMBER", {})
+    reply = "沒問題，請重新輸入您的「車號」："
+    await line_bot_api.reply_message(ReplyMessageRequest(reply_token=reply_token, messages=[TextMessage(text=reply)]))
 
 async def handle_postback(event):
     user_id = event.source.user_id
@@ -121,7 +146,11 @@ async def handle_postback(event):
     async with AsyncApiClient(configuration) as api_client:
         line_bot_api = AsyncMessagingApi(api_client)
         
-        if data == "action=need_media":
+        if data == "action=car_ok":
+            await ask_for_description(user_id, temp_data, line_bot_api, event.reply_token)
+        elif data == "action=car_retry":
+            await ask_for_car_number_again(user_id, line_bot_api, event.reply_token)
+        elif data == "action=need_media":
             Database.update_user_state(user_id, "WAIT_MEDIA", temp_data)
             reply = "請開始傳送照片或影片（可傳送多張）。\n傳送完畢後，請點擊下方按鈕進行下一步。"
             quick_reply = QuickReply(items=[
@@ -172,7 +201,6 @@ async def handle_content_message(event):
         if "media_urls" not in temp_data: temp_data["media_urls"] = []
         temp_data["media_urls"].append(public_url)
         
-        # Keep them in whatever state they were but update temp data
         Database.update_user_state(user_id, state_data["step"], temp_data)
         
         line_bot_api = AsyncMessagingApi(api_client)
@@ -184,7 +212,6 @@ async def handle_content_message(event):
 
 async def save_and_notify(user_id, temp_data, line_bot_api, reply_token):
     temp_data["user_id"] = user_id
-    # No AI summary anymore, use part of description
     temp_data["ai_summary"] = temp_data.get("description", "")[:20]
     Database.save_report(temp_data)
     Database.clear_user_state(user_id)
