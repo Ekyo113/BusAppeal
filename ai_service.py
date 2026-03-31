@@ -4,35 +4,40 @@ import json
 
 class AIService:
     def __init__(self):
-        genai.configure(api_key=Config.GEMINI_API_KEY)
-        self.model = genai.GenerativeModel('gemini-pro')
+        # Diagnostic print (masked for safety)
+        key = Config.GEMINI_API_KEY
+        if not key:
+            print("AI Service Diagnostic: GEMINI_API_KEY is EMPTY or NOT FOUND!")
+        else:
+            print(f"AI Service Diagnostic: Key starts with {key[:5]}... and ends with ...{key[-5:]}")
+        
+        genai.configure(api_key=key)
+        # Switching to gemini-1.5-flash for better performance and format support
+        self.model = genai.GenerativeModel('gemini-1.5-flash')
 
     async def analyze_report(self, description: str):
         prompt = f"""
-你是一個公車維修系統的後端助理。請將駕駛通報的資訊整理成固定格式。
+你是一個公車維修系統的後端助理。請將駕駛通報的資訊整理成正確的 JSON 格式。
 原始描述：「{description}」
 
-請以 JSON 格式回傳，包含以下欄位：
-- summary: 簡短的問題摘要（繁體中文）
-- missing_info: 如果資訊不足（例如沒有提到是哪裡壞掉、壞掉的情境），請提出一個簡短的問題請駕駛補充；如果資訊充足，此欄位留空。
-- suggestion: 給管理者的維修初步建議（選擇性）。
-
-回應範例：
+請回傳 JSON 格式如下：
 {{
-  "summary": "前門氣壓缸異常",
-  "missing_info": "請問是開門還是關門時有異音？",
-  "suggestion": "建議檢查電磁閥及氣壓管路"
+  "summary": "簡短摘要",
+  "missing_info": "追問資訊（若資訊充足請留空）",
+  "suggestion": "初步維修建議"
 }}
-
-請只回傳 JSON 字串，不要有其他解釋文字。
 """
         try:
+            print(f"AI Service: Analyzing description: {description}")
             response = self.model.generate_content(prompt)
-            # Try to parse JSON
+            print("AI Service: Successfully got response from Gemini.")
+            
+            # Clean up the response text (sometimes Gemini adds ```json ... ```)
             text = response.text.replace("```json", "").replace("```", "").strip()
             return json.loads(text)
         except Exception as e:
-            print(f"AI Service Error: {e}")
+            print(f"AI Service Error during generate_content: {type(e).__name__}: {e}")
+            # If it's a real API key error, this print will help confirm
             return {
                 "summary": description[:50],
                 "missing_info": "",
