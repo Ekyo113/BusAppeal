@@ -1,4 +1,3 @@
-from linebot.v3 import AsyncWebhookHandler
 from linebot.v3.exceptions import InvalidSignatureError
 from linebot.v3.messaging import (
     Configuration,
@@ -13,7 +12,14 @@ from linebot.v3.messaging import (
     PostbackAction,
     PushMessageRequest
 )
-from linebot.v3.webhooks import MessageEvent, TextMessageContent, ImageMessageContent, VideoMessageContent
+from linebot.v3.webhooks import (
+    MessageEvent, 
+    TextMessageContent, 
+    ImageMessageContent, 
+    VideoMessageContent,
+    PostbackEvent
+)
+from linebot.v3.webhook import WebhookParser
 import httpx
 from config import Config
 from database import Database
@@ -22,13 +28,27 @@ import uuid
 import asyncio
 
 configuration = Configuration(access_token=Config.LINE_CHANNEL_ACCESS_TOKEN)
-handler = AsyncWebhookHandler(Config.LINE_CHANNEL_SECRET)
+parser = WebhookParser(Config.LINE_CHANNEL_SECRET)
 ai_service = AIService()
 
 async def handle_callback(body: str, signature: str):
-    await handler.handle(body, signature)
+    try:
+        events = parser.parse(body, signature)
+        for event in events:
+            if isinstance(event, MessageEvent):
+                if isinstance(event.message, TextMessageContent):
+                    await handle_text_message(event)
+                elif isinstance(event.message, (ImageMessageContent, VideoMessageContent)):
+                    await handle_content_message(event)
+            elif isinstance(event, PostbackEvent):
+                await handle_postback(event)
+    except InvalidSignatureError:
+        raise
+    except Exception as e:
+        print(f"Error in handle_callback: {e}")
+        import traceback
+        traceback.print_exc()
 
-@handler.add(MessageEvent, message=TextMessageContent)
 async def handle_text_message(event):
     user_id = event.source.user_id
     text = event.message.text.strip()
@@ -65,22 +85,21 @@ async def handle_text_message(event):
                 if ai_result["missing_info"]:
                     summary_text += f"\n❓ 請補充：\n{ai_result['missing_info']}"
                 summary_text += "\n\n請確認是否「送出」？"
-            else:
-                # No car number found, start the normal flow
-                Database.update_user_state(user_id, "GET_CAR_NUMBER", {})
-                summary_text = "您好！我是品情通報助手。🚌\n請輸入您的「車號」："
-
-            quick_reply = None
-            if step != "START" or ai_result.get("car_number"):
+                
                 quick_reply = QuickReply(items=[
                     QuickReplyItem(action=PostbackAction(label="是，確認送出", data="action=confirm", display_text="確認送出")),
                     QuickReplyItem(action=PostbackAction(label="否，重新輸入", data="action=cancel", display_text="取消重填"))
                 ])
-
-            await line_bot_api.reply_message(ReplyMessageRequest(
-                reply_token=event.reply_token, 
-                messages=[TextMessage(text=summary_text, quick_reply=quick_reply)]
-            ))
+                
+                await line_bot_api.reply_message(ReplyMessageRequest(
+                    reply_token=event.reply_token, 
+                    messages=[TextMessage(text=summary_text, quick_reply=quick_reply)]
+                ))
+            else:
+                # No car number found, start the normal flow
+                Database.update_user_state(user_id, "GET_CAR_NUMBER", {})
+                reply = "您好！我是品情通報助手。🚌\n請輸入您的「車號」："
+                await line_bot_api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=reply)]))
 
         elif step == "GET_CAR_NUMBER":
             temp_data["car_number"] = text
@@ -122,7 +141,25 @@ async def handle_text_message(event):
                 reply = "請使用下方按鈕確認，或輸入「取消」重來。"
                 await line_bot_api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=reply)]))
 
-@handler.add(MessageEvent, message=(ImageMessageContent, VideoMessageContent))
+async def handle_postback(event):
+    user_id = event.source.user_id
+    data = event.postback.data
+    
+    state_data = Database.get_user_state(user_id)
+    if not state_data or state_data["step"] != "CONFIRM":
+        return
+
+    temp_data = state_data["temp_data"]
+    async with AsyncApiClient(configuration) as api_client:
+        line_bot_api = AsyncMessagingApi(api_client)
+        
+        if data == "action=confirm":
+            await save_and_notify(user_id, temp_data, line_bot_api, event.reply_token)
+        elif data == "action=cancel":
+            Database.clear_user_state(user_id)
+            reply = "已取消。如需重新報修請再次傳送車號或問題描述。"
+            await line_bot_api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=reply)]))
+
 async def handle_content_message(event):
     user_id = event.source.user_id
     
