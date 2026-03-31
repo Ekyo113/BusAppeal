@@ -56,6 +56,11 @@ class Database:
         return client.table("reports").select("*").order("created_at", desc=True).execute()
 
     @classmethod
+    def delete_report(cls, report_id: str):
+        client = cls.get_client()
+        return client.table("reports").delete().eq("id", report_id).execute()
+
+    @classmethod
     def update_report_status(cls, report_id: str, status: str):
         client = cls.get_client()
         return client.table("reports").update({

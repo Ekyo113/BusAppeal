@@ -84,11 +84,32 @@ function renderReports() {
             </div>
             <div class="card-footer">
                 <button onclick="viewDetail('${report.id}')">詳情</button>
-                ${report.status !== '已完成' ? `<button class="btn-primary" onclick="markDone('${report.id}')">完成維修</button>` : ''}
+                ${report.status !== '已完成' ? `<button class="btn-primary" onclick="markDone('${report.id}')">完成</button>` : ''}
+                <button class="btn-danger" onclick="deleteReport('${report.id}')">刪除</button>
             </div>
         `;
         list.appendChild(card);
     });
+}
+
+async function deleteReport(id) {
+    if (!confirm("確定要永久刪除這筆通報嗎？此操作不可還原。")) return;
+    
+    const token = document.getElementById('admin-token').value;
+    try {
+        const response = await fetch(`/admin/reports/${id}`, {
+            method: 'DELETE',
+            headers: { 'token': token }
+        });
+        if (response.ok) {
+            showToast("通報已刪除");
+            allReports = allReports.filter(r => r.id !== id);
+            renderReports();
+            updateStats();
+        }
+    } catch (error) {
+        showToast("刪除失敗", "error");
+    }
 }
 
 function updateStats() {

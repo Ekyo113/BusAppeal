@@ -28,6 +28,12 @@ async def update_status(report_id: str, data: dict = Body(...), token: str = Hea
     Database.update_report_status(report_id, status)
     return {"status": "success"}
 
+@router.delete("/reports/{report_id}")
+async def delete_report(report_id: str, token: str = Header(None)):
+    verify_token(token)
+    Database.delete_report(report_id)
+    return {"status": "success"}
+
 @router.post("/reports/{report_id}/notify")
 async def notify_driver(report_id: str, token: str = Header(None)):
     verify_token(token)
