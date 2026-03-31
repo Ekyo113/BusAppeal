@@ -4,33 +4,84 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>公車品情通報系統 - 管理後台</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Outfit:wght@400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-    <header>
-        <h1>🚌 公車品情通報管理系統</h1>
-        <div id="login-section">
-            <input type="password" id="admin-token" placeholder="請輸入管理金鑰">
-            <button onclick="loadReports()">登入/刷新</button>
+    <!-- Login Overlay -->
+    <div id="login-overlay">
+        <div class="login-box">
+            <div class="login-header">
+                <span class="icon">🛡️</span>
+                <h1>管理階層存取</h1>
+                <p>請輸入管理金鑰以繼續</p>
+            </div>
+            <div class="login-form">
+                <input type="password" id="admin-token" placeholder="管理金鑰" onkeypress="if(event.key === 'Enter') loadReports()">
+                <button onclick="loadReports()" id="login-btn">
+                    <span>登入系統</span>
+                    <i class="arrow">→</i>
+                </button>
+            </div>
         </div>
-    </header>
+    </div>
 
-    <main>
-        <section id="stats-summary">
-            <div class="stat-card">待處理: <span id="count-pending">0</span></div>
-            <div class="stat-card">維修中: <span id="count-in-progress">0</span></div>
-            <div class="stat-card">已完成: <span id="count-done">0</span></div>
-        </section>
+    <div id="dashboard-content" class="hidden">
+        <header>
+            <div class="brand">
+                <span class="logo">🚌</span>
+                <div class="title-group">
+                    <h1>公車品情通報管理</h1>
+                    <p>即時維修狀況追蹤</p>
+                </div>
+            </div>
+            <div class="user-actions">
+                <button onclick="location.reload()" class="btn-secondary">登出 / 刷新</button>
+            </div>
+        </header>
 
-        <section id="report-list">
-            <div class="loading">請輸入金鑰以載入資料...</div>
-        </section>
-    </main>
+        <main>
+            <div class="dashboard-grid">
+                <section class="stats-panel">
+                    <div class="stat-card" data-status="pending">
+                        <span class="label">待處理</span>
+                        <span class="value" id="count-pending">0</span>
+                    </div>
+                    <div class="stat-card" data-status="progress">
+                        <span class="label">維修中</span>
+                        <span class="value" id="count-in-progress">0</span>
+                    </div>
+                    <div class="stat-card" data-status="done">
+                        <span class="label">已完成</span>
+                        <span class="value" id="count-done">0</span>
+                    </div>
+                </section>
+
+                <section class="reports-section">
+                    <div class="section-header">
+                        <h2>📋 近期通報列表</h2>
+                        <div class="filters">
+                            <!-- Could add filters here -->
+                        </div>
+                    </div>
+                    <div id="report-list">
+                        <div class="loading-state">
+                            <div class="spinner"></div>
+                            <p>正在同步資料...</p>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
 
     <!-- Modal for details -->
     <div id="modal" class="hidden">
+        <div class="modal-overlay" onclick="closeModal()"></div>
         <div class="modal-content">
-            <span class="close" onclick="closeModal()">&times;</span>
+            <button class="close-btn" onclick="closeModal()">&times;</button>
             <div id="modal-body"></div>
         </div>
     </div>

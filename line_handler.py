@@ -61,81 +61,102 @@ async def handle_text_message(event):
         
         if text.lower() in ["取消", "退出", "reset"]:
             Database.clear_user_state(user_id)
-            reply = "已取消。隨時傳送訊息可開始新的通報。"
+            reply = "已取消通報流程。隨時可以再傳訊息開始新通報。"
             await line_bot_api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=reply)]))
             return
 
         if step == "START":
-            # Question 1: Car Number
+            # Step 1: Ask for Car Number
             Database.update_user_state(user_id, "GET_CAR_NUMBER", {})
-            reply = "您好！開始通報流程。🚌\nQ1：請輸入您的「車號」："
+            reply = "您好！開始通報流程。🚌\n\n1. 請輸入您的「車號」："
             await line_bot_api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=reply)]))
 
         elif step == "GET_CAR_NUMBER":
-            # Question 2: Description
+            # Step 2: Ask for Description
             temp_data["car_number"] = text
             Database.update_user_state(user_id, "GET_DESCRIPTION", temp_data)
-            reply = f"好的，車號為 {text}。\n\nQ2：請輸入「問題描述」：\n(您可以直接打字，也可以傳照片或影片)"
+            reply = f"好的，車號 {text}。\n\n2. 請輸入「問題描述」："
             await line_bot_api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=reply)]))
 
         elif step == "GET_DESCRIPTION":
-            # Question 3: Confirmation
+            # Step 3: Ask if Media is needed
             temp_data["description"] = text
-            temp_data["ai_summary"] = text[:30] # Use part of description as summary since AI is off
-            Database.update_user_state(user_id, "CONFIRM", temp_data)
+            Database.update_user_state(user_id, "GET_MEDIA_PROMPT", temp_data)
             
-            summary_text = f"📋 通報內容確認：\n\n🚌 車號：{temp_data['car_number']}\n⚠️ 問題：{text}\n"
-            if temp_data.get("media_urls"):
-                summary_text += f"📸 已上傳 {len(temp_data['media_urls'])} 個媒體檔\n"
-            
-            summary_text += "\n資料正確嗎？請點擊下方按鈕送出。"
-            
+            reply = "收到描述。最後一步：\n\n3. 是否需要上傳「照片或影片」？"
             quick_reply = QuickReply(items=[
-                QuickReplyItem(action=PostbackAction(label="✅ 是，確認送出", data="action=confirm", display_text="確認送出")),
-                QuickReplyItem(action=PostbackAction(label="❌ 否，取消重填", data="action=cancel", display_text="取消重填"))
+                QuickReplyItem(action=PostbackAction(label="📷 我要傳照片/影片", data="action=need_media", display_text="我要傳照片/影片")),
+                QuickReplyItem(action=PostbackAction(label="✅ 不用，直接送出", data="action=confirm_preview", display_text="直接送出"))
             ])
-            
             await line_bot_api.reply_message(ReplyMessageRequest(
                 reply_token=event.reply_token, 
-                messages=[TextMessage(text=summary_text, quick_reply=quick_reply)]
+                messages=[TextMessage(text=reply, quick_reply=quick_reply)]
+            ))
+
+        elif step == "WAIT_MEDIA":
+            # If they type something while in media state, treat as done?
+            # Or just ignore
+            reply = "請傳送照片或影片。上傳完畢後請點擊下方「預覽並送出」按鈕。"
+            quick_reply = QuickReply(items=[
+                QuickReplyItem(action=PostbackAction(label="✅ 預覽並送出", data="action=confirm_preview", display_text="預覽並送出"))
+            ])
+            await line_bot_api.reply_message(ReplyMessageRequest(
+                reply_token=event.reply_token, 
+                messages=[TextMessage(text=reply, quick_reply=quick_reply)]
             ))
 
         elif step == "CONFIRM":
-            if text == "確認送出":
-                await save_and_notify(user_id, temp_data, line_bot_api, event.reply_token)
-            else:
-                reply = "請點擊下方的按鈕「確認送出」，或是輸入「取消」重新開始。"
-                await line_bot_api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=reply)]))
+            # Only if they type instead of clicking button
+            await save_and_notify(user_id, temp_data, line_bot_api, event.reply_token)
 
 async def handle_postback(event):
     user_id = event.source.user_id
     data = event.postback.data
     
     state_data = Database.get_user_state(user_id)
-    if not state_data or state_data["step"] != "CONFIRM":
-        return
-
+    if not state_data: return
+    step = state_data["step"]
     temp_data = state_data["temp_data"]
+    
     async with AsyncApiClient(configuration) as api_client:
         line_bot_api = AsyncMessagingApi(api_client)
         
-        if data == "action=confirm":
+        if data == "action=need_media":
+            Database.update_user_state(user_id, "WAIT_MEDIA", temp_data)
+            reply = "請開始傳送照片或影片（可傳送多張）。\n傳送完畢後，請點擊下方按鈕進行下一步。"
+            quick_reply = QuickReply(items=[
+                QuickReplyItem(action=PostbackAction(label="✅ 預覽並送出", data="action=confirm_preview", display_text="預覽並送出"))
+            ])
+            await line_bot_api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=reply, quick_reply=quick_reply)]))
+        
+        elif data == "action=confirm_preview":
+            Database.update_user_state(user_id, "CONFIRM", temp_data)
+            media_count = len(temp_data.get("media_urls", []))
+            summary_text = f"📋 通報內容預覽：\n\n🚌 車號：{temp_data['car_number']}\n📝 描述：{temp_data['description']}\n🖼️ 媒體：{media_count} 個檔案\n\n確認內容無誤並送出通報嗎？"
+            quick_reply = QuickReply(items=[
+                QuickReplyItem(action=PostbackAction(label="✅ 確認送出", data="action=final_submit", display_text="確認送出")),
+                QuickReplyItem(action=PostbackAction(label="❌ 取消重填", data="action=cancel", display_text="取消重填"))
+            ])
+            await line_bot_api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=summary_text, quick_reply=quick_reply)]))
+            
+        elif data == "action=final_submit":
             await save_and_notify(user_id, temp_data, line_bot_api, event.reply_token)
+            
         elif data == "action=cancel":
             Database.clear_user_state(user_id)
-            reply = "已取消通報。您可以再次輸入訊息開始新的通報。"
+            reply = "已取消。如需重新報修請再次傳送訊息。"
             await line_bot_api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=reply)]))
 
 async def handle_content_message(event):
     user_id = event.source.user_id
     state_data = Database.get_user_state(user_id)
     
-    if not state_data or state_data["step"] != "GET_DESCRIPTION":
+    if not state_data or state_data["step"] not in ["GET_DESCRIPTION", "WAIT_MEDIA", "GET_MEDIA_PROMPT"]:
         async with AsyncApiClient(configuration) as api_client:
             line_bot_api = AsyncMessagingApi(api_client)
             await line_bot_api.reply_message(ReplyMessageRequest(
                 reply_token=event.reply_token, 
-                messages=[TextMessage(text="請先輸入車號並進入描述問題階段，再傳送圖片或影片。")]
+                messages=[TextMessage(text="請先依照步驟輸入車號與問題描述後，再上傳媒體檔案。")]
             ))
         return
 
@@ -151,14 +172,20 @@ async def handle_content_message(event):
         if "media_urls" not in temp_data: temp_data["media_urls"] = []
         temp_data["media_urls"].append(public_url)
         
-        Database.update_user_state(user_id, "GET_DESCRIPTION", temp_data)
+        # Keep them in whatever state they were but update temp data
+        Database.update_user_state(user_id, state_data["step"], temp_data)
         
         line_bot_api = AsyncMessagingApi(api_client)
-        reply = f"已收到第 {len(temp_data['media_urls'])} 個媒體檔案！\n\n如已上傳完畢，請「輸入文字描述問題」即可進入下一步。"
-        await line_bot_api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=reply)]))
+        reply = f"已收到第 {len(temp_data['media_urls'])} 個媒體檔案！\n\n還可以繼續傳送，或點擊下方按鈕預覽並送出。"
+        quick_reply = QuickReply(items=[
+            QuickReplyItem(action=PostbackAction(label="✅ 預覽並送出", data="action=confirm_preview", display_text="預覽並送出"))
+        ])
+        await line_bot_api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=reply, quick_reply=quick_reply)]))
 
 async def save_and_notify(user_id, temp_data, line_bot_api, reply_token):
     temp_data["user_id"] = user_id
+    # No AI summary anymore, use part of description
+    temp_data["ai_summary"] = temp_data.get("description", "")[:20]
     Database.save_report(temp_data)
     Database.clear_user_state(user_id)
     
