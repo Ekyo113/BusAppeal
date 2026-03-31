@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>公車品情通報系統 - 管理後台</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header>
+        <h1>🚌 公車品情通報管理系統</h1>
+        <div id="login-section">
+            <input type="password" id="admin-token" placeholder="請輸入管理金鑰">
+            <button onclick="loadReports()">登入/刷新</button>
+        </div>
+    </header>
+
+    <main>
+        <section id="stats-summary">
+            <div class="stat-card">待處理: <span id="count-pending">0</span></div>
+            <div class="stat-card">維修中: <span id="count-in-progress">0</span></div>
+            <div class="stat-card">已完成: <span id="count-done">0</span></div>
+        </section>
+
+        <section id="report-list">
+            <div class="loading">請輸入金鑰以載入資料...</div>
+        </section>
+    </main>
+
+    <!-- Modal for details -->
+    <div id="modal" class="hidden">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <div id="modal-body"></div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
