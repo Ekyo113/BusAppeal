@@ -151,6 +151,18 @@ function viewDetail(id) {
     document.body.style.overflow = 'hidden'; // Prevent scroll
 }
 
+function showToast(message, type = 'success') {
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.innerText = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.classList.add('show'), 100);
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 500);
+    }, 3000);
+}
+
 async function updateStatus(id, status) {
     const token = document.getElementById('admin-token').value;
     try {
@@ -163,16 +175,21 @@ async function updateStatus(id, status) {
             body: JSON.stringify({ status })
         });
         if (response.ok) {
-            closeModal();
-            loadReports();
+            // Success
+            allReports = allReports.map(r => r.id === id ? { ...r, status } : r);
+            renderReports();
+            updateStats();
+            if (document.getElementById('modal').classList.contains('hidden') === false) {
+                viewDetail(id); // Refresh detail view
+            }
         }
     } catch (error) {
-        alert("更新狀態失敗");
+        showToast("更新狀態失敗", "error");
     }
 }
 
 async function markDone(id) {
-    if (!confirm("確定維修完成並要通知駕駛嗎？\n這將會發送 Line 訊息給該位駕駛。")) return;
+    if (!confirm("確定維修完成並要通知駕駛嗎？")) return;
     
     const token = document.getElementById('admin-token').value;
     try {
@@ -183,16 +200,17 @@ async function markDone(id) {
         
         if (response.ok) {
             await updateStatus(id, '已完成');
-            alert("已更新狀態並發送通知！");
+            showToast("已更新狀態並發送通知！");
+            closeModal();
         } else {
-            alert("發送通知失敗，可能是 LINE API 錯誤。");
+            showToast("發送通知失敗", "error");
         }
     } catch (error) {
-        alert("操作過程發生錯誤。");
+        showToast("操作過程發生錯誤", "error");
     }
 }
 
 function closeModal() {
     document.getElementById('modal').classList.add('hidden');
-    document.body.style.overflow = 'auto';
+    // document.body.style.overflow = 'auto'; // Remove to avoid Safari issues
 }
