@@ -26,7 +26,10 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
     try:
         await handle_callback(body.decode("utf-8"), x_line_signature)
     except Exception as e:
-        print(f"Webhook Error: {e}")
+        import traceback
+        print(f"--- Webhook Error Detailed ---")
+        traceback.print_exc()
+        print(f"------------------------------")
         raise HTTPException(status_code=500, detail="Internal Server Error")
     
     return "OK"
