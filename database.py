@@ -69,6 +69,15 @@ class Database:
         }).eq("id", report_id).execute()
 
     @classmethod
+    def update_report_solution(cls, report_id: str, solution: str):
+        client = cls.get_client()
+        return client.table("reports").update({
+            "solution": solution,
+            "solution_at": datetime.utcnow().isoformat(),
+            "updated_at": datetime.utcnow().isoformat()
+        }).eq("id", report_id).execute()
+
+    @classmethod
     def upload_media(cls, file_content: bytes, file_name: str, content_type: str):
         client = cls.get_client()
         # Upload to 'bus-media' bucket

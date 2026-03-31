@@ -34,6 +34,13 @@ async def delete_report(report_id: str, token: str = Header(None)):
     Database.delete_report(report_id)
     return {"status": "success"}
 
+@router.patch("/reports/{report_id}/solution")
+async def update_solution(report_id: str, data: dict = Body(...), token: str = Header(None)):
+    verify_token(token)
+    solution = data.get("solution")
+    Database.update_report_solution(report_id, solution)
+    return {"status": "success"}
+
 @router.post("/reports/{report_id}/notify")
 async def notify_driver(report_id: str, token: str = Header(None)):
     verify_token(token)

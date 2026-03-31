@@ -1,4 +1,5 @@
 let allReports = [];
+let currentReportId = null;
 
 async function loadReports() {
     const tokenInput = document.getElementById('admin-token');
@@ -43,7 +44,6 @@ async function loadReports() {
     } catch (error) {
         console.error(error);
         alert("連線失敗，請檢查網路狀態。");
-        reportList.innerHTML = '<div class="loading-state"><p>載入失敗，請重新整理頁面。</p></div>';
     }
 }
 
@@ -92,6 +92,99 @@ function renderReports() {
     });
 }
 
+function viewDetail(id) {
+    currentReportId = id;
+    const report = allReports.find(r => r.id === id);
+    if (!report) return;
+
+    const modal = document.getElementById('modal');
+    const body = document.getElementById('modal-body');
+    const solutionDisplay = document.getElementById('solution-display');
+    const solutionInput = document.getElementById('solution-input');
+    
+    // Set solution
+    solutionDisplay.innerText = report.solution || "暫無處理紀錄";
+    solutionInput.value = report.solution || "";
+
+    let mediaHtml = '';
+    if (report.media_urls && report.media_urls.length > 0) {
+        mediaHtml = `
+            <div class="media-container">
+                <label>相關相片/影片 (${report.media_urls.length})</label>
+                <div class="media-grid">
+        `;
+        report.media_urls.forEach(url => {
+            if (url.toLowerCase().endsWith('.mp4')) {
+                mediaHtml += `<video class="media-item" src="${url}" controls></video>`;
+            } else {
+                mediaHtml += `<img class="media-item" src="${url}" onclick="window.open('${url}')">`;
+            }
+        });
+        mediaHtml += '</div></div>';
+    }
+
+    body.innerHTML = `
+        <div class="modal-body-content">
+            <div class="detail-header">
+                <h2 style="margin-bottom:1rem; color:var(--primary);">車號 # ${report.car_number}</h2>
+                <div style="margin-bottom:1.5rem">
+                    <span class="status-label ${report.status === '待處理' ? 'pending' : report.status === '維修中' ? 'progress' : 'done'}">${report.status}</span>
+                </div>
+            </div>
+            
+            <div class="detail-row">
+                <label>通報時間</label>
+                <p>${new Date(report.created_at).toLocaleString('zh-TW')}</p>
+            </div>
+            
+            <div class="detail-row">
+                <label>問題描述</label>
+                <p>${report.description}</p>
+            </div>
+
+            ${mediaHtml}
+
+            <div class="modal-actions">
+                ${report.status === '待處理' ? `<button class="btn-primary" onclick="updateStatus('${id}', '維修中')">進入維修</button>` : ''}
+                ${report.status !== '已完成' ? `<button class="btn-primary" onclick="markDone('${id}')">完成維修並通知</button>` : ''}
+                <button class="btn-secondary" onclick="closeModal()">關閉</button>
+            </div>
+        </div>
+    `;
+    modal.classList.remove('hidden');
+}
+
+async function saveSolution() {
+    if (!currentReportId) return;
+    const solution = document.getElementById('solution-input').value.trim();
+    if (!solution) {
+        showToast("請輸入方案內容", "error");
+        return;
+    }
+
+    const token = document.getElementById('admin-token').value;
+    try {
+        const response = await fetch(`/admin/reports/${currentReportId}/solution`, {
+            method: 'PATCH',
+            headers: { 
+                'token': token,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ solution })
+        });
+        if (response.ok) {
+            showToast("方案已儲存");
+            // Update local data
+            allReports = allReports.map(r => r.id === currentReportId ? { ...r, solution } : r);
+            document.getElementById('solution-display').innerText = solution;
+        } else {
+            showToast("儲存失敗", "error");
+        }
+    } catch (error) {
+        showToast("網路錯誤", "error");
+    }
+}
+
 async function deleteReport(id) {
     if (!confirm("確定要永久刪除這筆通報嗎？此操作不可還原。")) return;
     
@@ -118,60 +211,6 @@ function updateStats() {
     document.getElementById('count-done').innerText = allReports.filter(r => r.status === '已完成').length;
 }
 
-function viewDetail(id) {
-    const report = allReports.find(r => r.id === id);
-    const modal = document.getElementById('modal');
-    const body = document.getElementById('modal-body');
-
-    let mediaHtml = '';
-    if (report.media_urls && report.media_urls.length > 0) {
-        mediaHtml = `
-            <div class="media-container">
-                <label>相關相片/影片</label>
-                <div class="media-grid">
-        `;
-        report.media_urls.forEach(url => {
-            if (url.toLowerCase().endsWith('.mp4')) {
-                mediaHtml += `<video class="media-item" src="${url}" controls></video>`;
-            } else {
-                mediaHtml += `<img class="media-item" src="${url}" onclick="window.open('${url}')">`;
-            }
-        });
-        mediaHtml += '</div></div>';
-    }
-
-    body.innerHTML = `
-        <div class="modal-body-content">
-            <h2>通報詳情 - 車號 ${report.car_number}</h2>
-            
-            <div class="detail-row">
-                <label>通報日期與時間</label>
-                <p>${new Date(report.created_at).toLocaleString()}</p>
-            </div>
-            
-            <div class="detail-row">
-                <label>問題描述</label>
-                <p>${report.description}</p>
-            </div>
-
-            <div class="detail-row">
-                <label>目前狀態</label>
-                <p><strong>${report.status}</strong></p>
-            </div>
-
-            ${mediaHtml}
-
-            <div class="modal-actions">
-                ${report.status !== '待處理' ? `<button onclick="updateStatus('${id}', '待處理')">設為待處理</button>` : ''}
-                ${report.status !== '維修中' ? `<button onclick="updateStatus('${id}', '維修中')">設為維修中</button>` : ''}
-                ${report.status !== '已完成' ? `<button class="btn-primary" onclick="markDone('${id}')">維修完成並通知</button>` : ''}
-            </div>
-        </div>
-    `;
-    modal.classList.remove('hidden');
-    document.body.style.overflow = 'hidden'; // Prevent scroll
-}
-
 function showToast(message, type = 'success') {
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
@@ -196,12 +235,11 @@ async function updateStatus(id, status) {
             body: JSON.stringify({ status })
         });
         if (response.ok) {
-            // Success
             allReports = allReports.map(r => r.id === id ? { ...r, status } : r);
             renderReports();
             updateStats();
-            if (document.getElementById('modal').classList.contains('hidden') === false) {
-                viewDetail(id); // Refresh detail view
+            if (!document.getElementById('modal').classList.contains('hidden')) {
+                viewDetail(id);
             }
         }
     } catch (error) {
@@ -233,5 +271,4 @@ async function markDone(id) {
 
 function closeModal() {
     document.getElementById('modal').classList.add('hidden');
-    // document.body.style.overflow = 'auto'; // Remove to avoid Safari issues
 }

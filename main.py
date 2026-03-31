@@ -17,6 +17,12 @@ app.include_router(admin_router)
 async def root():
     return {"status": "Bus Report System is running"}
 
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+print("==> Application initializing...")
+
 @app.post("/webhook")
 async def callback(request: Request, x_line_signature: str = Header(None)):
     if not x_line_signature:

@@ -405,6 +405,55 @@ main {
     margin: 0 auto 1rem;
 }
 
+/* Solution Section */
+.solution-section {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+}
+
+.solution-section h4 {
+    margin-bottom: 0.75rem;
+    color: var(--primary);
+    font-size: 1rem;
+}
+
+.solution-text {
+    background: rgba(255,255,255,0.05);
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    color: var(--text);
+    border-left: 4px solid var(--primary);
+    white-space: pre-wrap;
+}
+
+.solution-input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.solution-input-group textarea {
+    width: 100%;
+    min-height: 100px;
+    background: var(--surface-light);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.75rem;
+    color: white;
+    font-family: inherit;
+    resize: vertical;
+    font-size: 0.9rem;
+}
+
+.solution-input-group textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
 /* Toast */
 .toast {
     position: fixed;
