@@ -252,31 +252,35 @@ main {
     color: var(--text-muted);
 }
 
+.user-actions {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+.filter-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    user-select: none;
+}
+
+.filter-toggle input {
+    cursor: pointer;
+}
+
 .styled-table th,
 .styled-table td {
     padding: 1rem 1.25rem;
     border-bottom: 1px solid var(--border);
+    white-space: nowrap;
 }
-
-.styled-table tbody tr {
-    transition: background-color 0.2s;
-    cursor: pointer;
-}
-
-.styled-table tbody tr:hover {
-    background-color: rgba(255,255,255,0.05);
-}
-
-.styled-table tbody tr:last-of-type {
-    border-bottom: none;
-}
-
-.row-index { color: var(--text-muted); font-family: monospace; font-size: 0.85rem; }
-
-.cell-car { font-weight: 600; color: var(--primary); font-family: 'Outfit'; }
 
 .cell-desc {
-    max-width: 300px;
+    max-width: 500px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

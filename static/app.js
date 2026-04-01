@@ -47,16 +47,27 @@ async function loadReports() {
     }
 }
 
+let hideDone = false;
+
+function toggleHideDone() {
+    hideDone = document.getElementById('hide-done-check').checked;
+    renderReports();
+}
+
 function renderReports() {
     const list = document.getElementById('report-list');
     list.innerHTML = '';
 
-    if (allReports.length === 0) {
-        list.innerHTML = '<tr><td colspan="6" class="loading-state">目前尚無任何通報記錄。</td></tr>';
+    const filteredReports = hideDone 
+        ? allReports.filter(r => r.status !== '已完成')
+        : allReports;
+
+    if (filteredReports.length === 0) {
+        list.innerHTML = '<tr><td colspan="6" class="loading-state">目前尚無通報記錄。</td></tr>';
         return;
     }
 
-    allReports.forEach((report, index) => {
+    filteredReports.forEach((report, index) => {
         const row = document.createElement('tr');
         row.onclick = () => viewDetail(report.id);
         

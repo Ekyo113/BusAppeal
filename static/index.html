@@ -33,6 +33,9 @@
                 </div>
             </div>
             <div class="user-actions">
+                <label class="filter-toggle">
+                    <input type="checkbox" id="hide-done-check" onchange="toggleHideDone()"> 隱藏已完成
+                </label>
                 <button onclick="loadReports()" class="btn-refresh">🔄 刷新資料</button>
                 <button onclick="location.reload()" class="btn-secondary">登出</button>
             </div>
