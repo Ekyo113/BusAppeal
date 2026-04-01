@@ -123,6 +123,25 @@ async def handle_text_message(event):
                 messages=[TextMessage(text=reply, quick_reply=quick_reply)]
             ))
 
+        elif step == "GET_MEDIA_PROMPT":
+            # If they type instead of clicking button
+            if text in ["是", "要", "好", "上傳", "照片", "影片"]:
+                Database.update_user_state(user_id, "WAIT_MEDIA", temp_data)
+                reply = "請開始傳送照片或影片（可傳送多張）。\n傳送完畢後，請點擊下方按鈕進行下一步。"
+                quick_reply = QuickReply(items=[
+                    QuickReplyItem(action=PostbackAction(label="✅ 預覽並送出", data="action=confirm_preview", display_text="預覽並送出"))
+                ])
+                await line_bot_api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=reply, quick_reply=quick_reply)]))
+            else:
+                # Default to no and show preview
+                Database.update_user_state(user_id, "CONFIRM", temp_data)
+                summary_text = f"📋 通報內容預覽：\n\n🚌 車號：{temp_data['car_number']}\n📝 描述：{temp_data['description']}\n\n確認內容無誤並送出通報嗎？"
+                quick_reply = QuickReply(items=[
+                    QuickReplyItem(action=PostbackAction(label="✅ 確認送出", data="action=final_submit", display_text="確認送出")),
+                    QuickReplyItem(action=PostbackAction(label="❌ 取消重填", data="action=cancel", display_text="取消重填"))
+                ])
+                await line_bot_api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=summary_text, quick_reply=quick_reply)]))
+
         elif step == "WAIT_MEDIA":
             reply = "請傳送照片或影片。上傳完畢後請點擊下方「預覽並送出」按鈕。"
             quick_reply = QuickReply(items=[
