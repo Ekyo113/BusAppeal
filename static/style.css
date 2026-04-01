@@ -245,6 +245,7 @@ main {
     border-collapse: collapse;
     font-size: 0.9rem;
     text-align: left;
+    table-layout: fixed; /* Strict layout */
 }
 
 .styled-table thead tr {
