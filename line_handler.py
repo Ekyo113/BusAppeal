@@ -53,7 +53,11 @@ async def handle_text_message(event):
     # Debug: Output source ID (User, Group, or Room) to logs for easy configuration
     source_id = getattr(event.source, "group_id", getattr(event.source, "room_id", user_id))
     print(f"DEBUG: Message from {user_id}. Source ID (use this for LINE_NOTIFY_ID): {source_id}")
-    
+
+    # [NEW] Check if this is a private chat. If not, don't trigger the flow.
+    if event.source.type != "user":
+        return
+
     # Get current state
     state_data = Database.get_user_state(user_id)
     step = state_data["step"] if state_data else "START"
@@ -190,7 +194,11 @@ async def handle_content_message(event):
         
         # Debug: Output source ID (User or Group) to logs
         source_id = getattr(event.source, "group_id", getattr(event.source, "room_id", user_id))
-        print(f"DEBUG: Message from {display_name} ({user_id}). Source ID (for config): {source_id}")
+        print(f"DEBUG: Media from {display_name} ({user_id}). Source ID: {source_id}")
+
+    # [NEW] Check if this is a private chat. If not, don't trigger the flow.
+    if event.source.type != "user":
+        return
 
     state_data = Database.get_user_state(user_id)
     
