@@ -1,40 +1,35 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>公車品情通報系統 - 管理後台</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Outfit:wght@400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet">
 </head>
-<body>
+<body class="bg-dark">
     <!-- Login Overlay -->
     <div id="login-overlay">
         <div class="login-box">
             <div class="login-header">
-                <span class="icon">🛡️</span>
-                <h1>管理階層存取</h1>
-                <p>請輸入管理金鑰以繼續</p>
+                <div class="logo-icon">🛠️</div>
+                <h1>管理系統</h1>
+                <p>請輸入管理員金鑰以繼續</p>
             </div>
             <div class="login-form">
                 <input type="password" id="admin-token" placeholder="管理金鑰" onkeypress="if(event.key === 'Enter') loadReports()">
-                <button onclick="loadReports()" id="login-btn">
-                    <span>登入系統</span>
-                    <i class="arrow">→</i>
-                </button>
+                <button onclick="loadReports()" class="btn-primary">登入後台</button>
             </div>
         </div>
     </div>
 
+    <!-- Main Dashboard -->
     <div id="dashboard-content" class="hidden">
-        <header>
-            <div class="brand">
-                <span class="logo">🚌</span>
-                <div class="title-group">
-                    <h1>公車品情通報管理</h1>
-                    <p>即時維修狀況追蹤</p>
+        <header class="main-header">
+            <div class="header-left">
+                <span class="brand">BusAppeal Admin</span>
+                <div class="status-indicator">
+                    <span class="dot"></span> 系統連線中
                 </div>
             </div>
             <div class="user-actions">
@@ -45,7 +40,8 @@
 
         <main>
             <div class="dashboard-grid">
-                <section class="stats-panel">
+                <!-- Sidebar Stats -->
+                <aside class="stats-panel">
                     <div class="stat-card" data-status="pending">
                         <span class="label">待處理</span>
                         <span class="value" id="count-pending">0</span>
@@ -58,20 +54,29 @@
                         <span class="label">已完成</span>
                         <span class="value" id="count-done">0</span>
                     </div>
-                </section>
+                </aside>
 
+                <!-- Reports Table List -->
                 <section class="reports-section">
                     <div class="section-header">
-                        <h2>📋 近期通報列表</h2>
-                        <div class="filters">
-                            <!-- Could add filters here -->
-                        </div>
+                        <h2>📋 通報清單 (條列式)</h2>
                     </div>
-                    <div id="report-list">
-                        <div class="loading-state">
-                            <div class="spinner"></div>
-                            <p>正在同步資料...</p>
-                        </div>
+                    <div class="table-container">
+                        <table class="styled-table">
+                            <thead>
+                                <tr>
+                                    <th width="40">#</th>
+                                    <th width="80">狀態</th>
+                                    <th width="100">車號</th>
+                                    <th>問題描述</th>
+                                    <th width="160">時間</th>
+                                    <th width="180">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="report-list">
+                                <!-- Table rows injected by JS -->
+                            </tbody>
+                        </table>
                     </div>
                 </section>
             </div>
@@ -84,8 +89,9 @@
         <div class="modal-content">
             <button class="close-btn" onclick="closeModal()">&times;</button>
             <div id="modal-body"></div>
+            
             <div id="solution-section" class="solution-section">
-                <h4>🛠️ 處理方案</h4>
+                <h4>🛠️ 處理方案 (Solution)</h4>
                 <div id="solution-display" class="solution-text">暫無處理紀錄</div>
                 <div class="solution-input-group">
                     <textarea id="solution-input" placeholder="請輸入維修結果或處理方案..."></textarea>

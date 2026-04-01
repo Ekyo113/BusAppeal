@@ -7,7 +7,8 @@ class Config:
     # LINE settings
     LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
     LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
-    LINE_ADMIN_GROUP_ID = os.getenv("LINE_ADMIN_GROUP_ID") # Comma-separated IDs
+    LINE_NOTIFY_ID = os.getenv("LINE_NOTIFY_ID", os.getenv("LINE_ADMIN_GROUP_ID"))
+    LINE_RECEIVE_ID = os.getenv("LINE_RECEIVE_ID", "")
     
     # Gemini settings
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -24,7 +25,7 @@ class Config:
         required = [
             "LINE_CHANNEL_SECRET", 
             "LINE_CHANNEL_ACCESS_TOKEN", 
-            "LINE_ADMIN_GROUP_ID",
+            "LINE_NOTIFY_ID",
             "GEMINI_API_KEY",
             "SUPABASE_URL",
             "SUPABASE_SERVICE_KEY"

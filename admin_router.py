@@ -58,5 +58,14 @@ async def notify_driver(report_id: str, token: str = Header(None)):
         line_bot_api = MessagingApi(api_client)
         msg = f"🔧 維修進度通知\n\n您通報的車輛 {car_number} 已維修完成！\n感謝您的回報。"
         line_bot_api.push_message(PushMessageRequest(to=driver_id, messages=[TextMessage(text=msg)]))
+        
+        # Also notify Admin Notify Group(s)
+        admin_msg = f"✅ 【維修完成】\n車號：{car_number}\n該單據已標記為已完成。"
+        notify_ids = [id.strip() for id in Config.LINE_NOTIFY_ID.split(",") if id.strip()]
+        for notify_id in notify_ids:
+            try:
+                line_bot_api.push_message(PushMessageRequest(to=notify_id, messages=[TextMessage(text=admin_msg)]))
+            except Exception as e:
+                print(f"Push completion to {notify_id} failed: {e}")
     
     return {"status": "sent"}

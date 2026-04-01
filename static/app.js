@@ -52,14 +52,13 @@ function renderReports() {
     list.innerHTML = '';
 
     if (allReports.length === 0) {
-        list.innerHTML = '<div class="loading-state"><p>目前尚無任何通報記錄。</p></div>';
+        list.innerHTML = '<tr><td colspan="6" class="loading-state">目前尚無任何通報記錄。</td></tr>';
         return;
     }
 
-    allReports.forEach(report => {
-        const card = document.createElement('div');
-        card.className = 'report-card';
-        card.setAttribute('data-status', report.status);
+    allReports.forEach((report, index) => {
+        const row = document.createElement('tr');
+        row.onclick = () => viewDetail(report.id);
         
         const statusMap = {
             '待處理': 'pending',
@@ -67,28 +66,23 @@ function renderReports() {
             '已完成': 'done'
         };
         const statusClass = statusMap[report.status] || 'pending';
-        const mediaCount = report.media_urls ? report.media_urls.length : 0;
-        const timeStr = new Date(report.created_at).toLocaleString('zh-TW', { hour12: false });
+        const timeStr = new Date(report.created_at).toLocaleString('zh-TW', { 
+            month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false 
+        });
 
-        card.innerHTML = `
-            <div class="card-header">
-                <span class="car-id"># ${report.car_number}</span>
-                <span class="status-label ${statusClass}">${report.status}</span>
-            </div>
-            <div class="card-body">
-                <h3>${report.description.substring(0, 40)}${report.description.length > 40 ? '...' : ''}</h3>
-                <div class="card-meta">
-                    <p>🕒 ${timeStr}</p>
-                    <p>📸 ${mediaCount} 個媒體檔案</p>
-                </div>
-            </div>
-            <div class="card-footer">
-                <button onclick="viewDetail('${report.id}')">詳情</button>
-                ${report.status !== '已完成' ? `<button class="btn-primary" onclick="markDone('${report.id}')">完成</button>` : ''}
-                <button class="btn-danger" onclick="deleteReport('${report.id}')">刪除</button>
-            </div>
+        row.innerHTML = `
+            <td class="row-index">${index + 1}</td>
+            <td><span class="status-label ${statusClass}">${report.status}</span></td>
+            <td class="cell-car">${report.car_number}</td>
+            <td class="cell-desc">${report.description}</td>
+            <td class="cell-time">${timeStr}</td>
+            <td class="table-actions">
+                <button onclick="event.stopPropagation(); viewDetail('${report.id}')">詳情</button>
+                ${report.status !== '已完成' ? `<button class="btn-primary" onclick="event.stopPropagation(); markDone('${report.id}')">完成</button>` : ''}
+                <button class="btn-danger" onclick="event.stopPropagation(); deleteReport('${report.id}')">刪除</button>
+            </td>
         `;
-        list.appendChild(card);
+        list.appendChild(row);
     });
 }
 

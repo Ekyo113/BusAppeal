@@ -223,10 +223,13 @@ async def save_and_notify(user_id, temp_data, line_bot_api, reply_token):
     
     msg = f"📣 【新通報】\n車號：{temp_data['car_number']}\n內容：{temp_data.get('description', '純媒體通報')}\n\n請前往後台查看詳情。"
     
-    # Notify Admin(s)
-    admin_ids = [id.strip() for id in Config.LINE_ADMIN_GROUP_ID.split(",") if id.strip()]
-    for admin_id in admin_ids:
+    # Notify Admin Groups
+    notify_ids = [id.strip() for id in Config.LINE_NOTIFY_ID.split(",") if id.strip()]
+    receive_ids = [id.strip() for id in Config.LINE_RECEIVE_ID.split(",") if id.strip()]
+    
+    all_targets = list(set(notify_ids + receive_ids))
+    for target_id in all_targets:
         try:
-            await line_bot_api.push_message(PushMessageRequest(to=admin_id, messages=[TextMessage(text=msg)]))
+            await line_bot_api.push_message(PushMessageRequest(to=target_id, messages=[TextMessage(text=msg)]))
         except Exception as e:
-            print(f"Push notification to {admin_id} failed: {e}")
+            print(f"Push notification to {target_id} failed: {e}")
