@@ -51,16 +51,20 @@ async def handle_text_message(event):
     text = event.message.text.strip()
     
     # Debug: Output source ID (User, Group, or Room) to logs for easy configuration
+    source_type = event.source.type
     source_id = getattr(event.source, "group_id", getattr(event.source, "room_id", user_id))
-    print(f"DEBUG: Message from {user_id}. Source ID (use this for LINE_NOTIFY_ID): {source_id}")
+    print(f"DEBUG: Message source type: {source_type}, source ID: {source_id}")
 
     # [NEW] Check if this is a private chat. If not, don't trigger the flow.
-    if event.source.type != "user":
+    if source_type != "user":
+        print(f"DEBUG: Skipping message because source type is {source_type}")
         return
 
     # Get current state
+    print(f"DEBUG: Fetching state for {user_id}...")
     state_data = Database.get_user_state(user_id)
     step = state_data["step"] if state_data else "START"
+    print(f"DEBUG: Current step: {step}")
     temp_data = state_data["temp_data"] if state_data else {}
 
     async with AsyncApiClient(configuration) as api_client:
@@ -193,11 +197,13 @@ async def handle_content_message(event):
         display_name = profile.display_name
         
         # Debug: Output source ID (User or Group) to logs
+        source_type = event.source.type
         source_id = getattr(event.source, "group_id", getattr(event.source, "room_id", user_id))
-        print(f"DEBUG: Media from {display_name} ({user_id}). Source ID: {source_id}")
+        print(f"DEBUG: Media from {display_name} ({user_id}). Source type: {source_type}")
 
     # [NEW] Check if this is a private chat. If not, don't trigger the flow.
-    if event.source.type != "user":
+    if source_type != "user":
+        print(f"DEBUG: Skipping media because source type is {source_type}")
         return
 
     state_data = Database.get_user_state(user_id)
