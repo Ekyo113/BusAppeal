@@ -63,7 +63,7 @@ function renderReports() {
         : allReports;
 
     if (filteredReports.length === 0) {
-        list.innerHTML = '<tr><td colspan="6" class="loading-state">目前尚無通報記錄。</td></tr>';
+        list.innerHTML = '<tr><td colspan="7" class="loading-state">目前尚無通報記錄。</td></tr>';
         return;
     }
 
