@@ -50,6 +50,10 @@ async def handle_text_message(event):
     user_id = event.source.user_id
     text = event.message.text.strip()
     
+    # Debug: Output source ID (User, Group, or Room) to logs for easy configuration
+    source_id = getattr(event.source, "group_id", getattr(event.source, "room_id", user_id))
+    print(f"DEBUG: Message from {user_id}. Source ID (use this for LINE_NOTIFY_ID): {source_id}")
+    
     # Get current state
     state_data = Database.get_user_state(user_id)
     step = state_data["step"] if state_data else "START"
@@ -178,6 +182,16 @@ async def handle_postback(event):
 
 async def handle_content_message(event):
     user_id = event.source.user_id
+    
+    async with AsyncApiClient(configuration) as api_client:
+        line_bot_api = AsyncMessagingApi(api_client)
+        profile = await line_bot_api.get_profile(user_id)
+        display_name = profile.display_name
+        
+        # Debug: Output source ID (User or Group) to logs
+        source_id = getattr(event.source, "group_id", getattr(event.source, "room_id", user_id))
+        print(f"DEBUG: Message from {display_name} ({user_id}). Source ID (for config): {source_id}")
+
     state_data = Database.get_user_state(user_id)
     
     if not state_data or state_data["step"] not in ["GET_DESCRIPTION", "WAIT_MEDIA", "GET_MEDIA_PROMPT"]:

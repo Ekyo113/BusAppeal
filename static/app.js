@@ -143,6 +143,11 @@ function viewDetail(id) {
             </div>
             
             <div class="detail-row">
+                <label>駕駛 LINE ID</label>
+                <p><code>${report.driver_line_user_id}</code></p>
+            </div>
+            
+            <div class="detail-row">
                 <label>問題描述</label>
                 <p>${report.description}</p>
             </div>
