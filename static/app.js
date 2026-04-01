@@ -86,6 +86,7 @@ function renderReports() {
             <td><span class="status-label ${statusClass}">${report.status}</span></td>
             <td class="cell-car">${report.car_number}</td>
             <td class="cell-desc">${report.description}</td>
+            <td class="cell-sol">${report.solution || '-'}</td>
             <td class="cell-time">${timeStr}</td>
             <td class="table-actions">
                 <button onclick="event.stopPropagation(); viewDetail('${report.id}')">詳情</button>
@@ -140,11 +141,6 @@ function viewDetail(id) {
             <div class="detail-row">
                 <label>通報時間</label>
                 <p>${new Date(report.created_at).toLocaleString('zh-TW')}</p>
-            </div>
-            
-            <div class="detail-row">
-                <label>駕駛 LINE ID</label>
-                <p><code>${report.driver_line_user_id}</code></p>
             </div>
             
             <div class="detail-row">

@@ -280,8 +280,8 @@ main {
     white-space: nowrap;
 }
 
-.cell-desc {
-    max-width: 500px;
+.cell-desc, .cell-sol {
+    max-width: 300px; /* Reduced from 500 to fit both columns */
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
