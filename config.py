@@ -26,7 +26,6 @@ class Config:
             "LINE_CHANNEL_SECRET", 
             "LINE_CHANNEL_ACCESS_TOKEN", 
             "LINE_NOTIFY_ID",
-            "GEMINI_API_KEY",
             "SUPABASE_URL",
             "SUPABASE_SERVICE_KEY"
         ]

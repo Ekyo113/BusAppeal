@@ -23,7 +23,6 @@ from linebot.v3.webhook import WebhookParser
 import httpx
 from config import Config
 from database import Database
-from ai_service import AIService
 import uuid
 import asyncio
 
@@ -259,6 +258,7 @@ async def handle_content_message(event):
 
 async def save_and_notify(user_id, temp_data, line_bot_api, reply_token):
     temp_data["user_id"] = user_id
+    # Use first 20 chars of description as summary instead of AI
     temp_data["ai_summary"] = temp_data.get("description", "")[:20]
     Database.save_report(temp_data)
     Database.clear_user_state(user_id)

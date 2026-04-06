@@ -1,7 +1,6 @@
 fastapi>=0.109.0
 uvicorn
 line-bot-sdk==3.7.0
-google-generativeai
 supabase>=2.11.0
 python-dotenv
 python-multipart
