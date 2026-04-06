@@ -268,13 +268,21 @@ async def save_and_notify(user_id, temp_data, line_bot_api, reply_token):
         messages=[TextMessage(text="✅ 通報已成功送出！維修售後將會通知您。")]
     ))
     
-    msg = f"📣 【新通報】\n車號：{temp_data['car_number']}\n內容：{temp_data.get('description', '純媒體通報')}\n\n請前往後台查看詳情。"
+    car_number = temp_data.get("car_number", "")
+    msg = f"📣 【新通報】\n車號：{car_number}\n內容：{temp_data.get('description', '純媒體通報')}\n\n請前往後台查看詳情。"
     
-    # Notify Admin Groups
+    # 1. Fetch dynamic vendor group IDs based on exact car number match
+    vendor_ids = Database.get_vendor_groups(car_number)
+    print(f"DEBUG Routing: Car {car_number} matched vendor groups: {vendor_ids}")
+
+    # 2. Get default Admin/Receiver IDs from config
     notify_ids = [id.strip() for id in Config.LINE_NOTIFY_ID.split(",") if id.strip()]
     receive_ids = [id.strip() for id in Config.LINE_RECEIVE_ID.split(",") if id.strip()]
     
-    all_targets = list(set(notify_ids + receive_ids))
+    # 3. Merge all targets (Set to ensure uniqueness)
+    all_targets = list(set(notify_ids + receive_ids + vendor_ids))
+    print(f"DEBUG Routing: Final push target IDs: {all_targets}")
+
     for target_id in all_targets:
         try:
             await line_bot_api.push_message(PushMessageRequest(to=target_id, messages=[TextMessage(text=msg)]))

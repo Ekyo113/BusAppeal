@@ -51,6 +51,28 @@ class Database:
         return client.table("reports").insert(report).execute()
 
     @classmethod
+    def get_vendor_groups(cls, car_number: str) -> list:
+        """
+        Retrieves matching LINE Group IDs from the vendor_mappings table
+        based on an EXACT match of the car_number.
+        """
+        if not car_number:
+            return []
+            
+        client = cls.get_client()
+        try:
+            # Query the vendor_mappings table for an exact match on 'pattern'
+            response = client.table("vendor_mappings").select("group_id").eq("pattern", car_number).execute()
+            if response.data:
+                # Return all matching group IDs (usually only one due to UNIQUE constraint)
+                return [item["group_id"] for item in response.data]
+        except Exception as e:
+            print(f"Database Error in get_vendor_groups: {e}")
+            # Fallback to the admin groups only if query fails (by returning empty vendor list)
+            
+        return []
+
+    @classmethod
     def get_all_reports(cls):
         client = cls.get_client()
         return client.table("reports").select("*").order("created_at", desc=True).execute()
