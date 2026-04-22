@@ -17,6 +17,10 @@ class Config:
     SUPABASE_URL = os.getenv("SUPABASE_URL")
     SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
     
+    # TDX API settings
+    TDX_CLIENT_ID = os.getenv("TDX_CLIENT_ID")
+    TDX_CLIENT_SECRET = os.getenv("TDX_CLIENT_SECRET")
+    
     # Admin settings
     ADMIN_SECRET_KEY = os.getenv("ADMIN_SECRET_KEY", "default_secret_key")
     
