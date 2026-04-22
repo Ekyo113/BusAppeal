@@ -5,4 +5,3 @@ supabase>=2.11.0
 python-dotenv
 python-multipart
 jinja2
-httpx

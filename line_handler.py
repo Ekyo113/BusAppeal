@@ -17,7 +17,6 @@ from linebot.v3.webhooks import (
     TextMessageContent, 
     ImageMessageContent, 
     VideoMessageContent,
-    FileMessageContent,
     PostbackEvent
 )
 from linebot.v3.webhook import WebhookParser
@@ -39,8 +38,6 @@ async def handle_callback(body: str, signature: str):
                     await handle_text_message(event)
                 elif isinstance(event.message, (ImageMessageContent, VideoMessageContent)):
                     await handle_content_message(event)
-                elif isinstance(event.message, FileMessageContent):
-                    await handle_file_message(event)
             elif isinstance(event, PostbackEvent):
                 await handle_postback(event)
     except InvalidSignatureError:
@@ -287,93 +284,7 @@ async def save_and_notify(user_id, temp_data, line_bot_api, reply_token):
     print(f"DEBUG Routing: Final push target IDs: {all_targets}")
 
     for target_id in all_targets:
-        # Valid Line IDs must start with U (User), C (Group), or R (Room) and are usually 33 characters long.
-        # We skip numeric mock IDs or invalid strings to avoid 400 Bad Request.
-        if not target_id or not (target_id.startswith('U') or target_id.startswith('C') or target_id.startswith('R')):
-            print(f"Skipping invalid target ID: {target_id}")
-            continue
-
         try:
             await line_bot_api.push_message(PushMessageRequest(to=target_id, messages=[TextMessage(text=msg)]))
         except Exception as e:
             print(f"Push notification to {target_id} failed: {e}")
-
-async def handle_file_message(event):
-    user_id = event.source.user_id
-    file_name = event.message.file_name
-    file_id = event.message.id
-    
-    print(f"DEBUG: File message from {user_id}: {file_name}")
-
-    async with AsyncApiClient(configuration) as api_client:
-        line_bot_api = AsyncMessagingApi(api_client)
-        line_bot_blob_api = AsyncMessagingApiBlob(api_client)
-        
-        # 1. Notify user that we are analyzing
-        await line_bot_api.reply_message(ReplyMessageRequest(
-            reply_token=event.reply_token,
-            messages=[TextMessage(text=f"📂 收到檔案：{file_name}\n正在進行分析，請稍候...")]
-        ))
-
-        try:
-            # 2. Download file content
-            content = await line_bot_blob_api.get_message_content(file_id)
-            
-            # 3. Send to OnlyTPMS HF Space API
-            # URL: https://ekyolin-onlytpms.hf.space/analyze
-            hf_api_url = "https://ekyolin-onlytpms.hf.space/analyze"
-            
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                files = {'file': (file_name, content, 'application/octet-stream')}
-                response = await client.post(hf_api_url, files=files)
-                
-                if response.status_code != 200:
-                    error_msg = f"❌ 分析失敗 (HTTP {response.status_code})"
-                    print(f"Analysis API failed: {response.status_code}, Body: {response.text}")
-                    await line_bot_api.push_message(PushMessageRequest(to=user_id, messages=[TextMessage(text=error_msg)]))
-                    return
-
-                try:
-                    results = response.json()
-                except ValueError:
-                    print(f"Failed to parse JSON response: {response.text}")
-                    await line_bot_api.push_message(PushMessageRequest(to=user_id, messages=[TextMessage(text="❌ 分析失敗：回傳內容格式錯誤")]))
-                    return
-                
-                # 4. Extract Unique Chassis Codes
-                unique_codes = set()
-                
-                # Handling batch results (individual_results)
-                if 'individual_results' in results:
-                    for file_result in results['individual_results'].values():
-                        if isinstance(file_result, dict) and 'chassis' in file_result:
-                            codes = file_result['chassis'].get('codes', [])
-                            for code_entry in codes:
-                                if isinstance(code_entry, dict) and 'code' in code_entry:
-                                    code = str(code_entry['code']).strip()
-                                    if code and code != '0-0':
-                                        unique_codes.add(code)
-                # Handling single file result
-                elif 'chassis' in results:
-                    codes = results['chassis'].get('codes', [])
-                    for code_entry in codes:
-                        if isinstance(code_entry, dict) and 'code' in code_entry:
-                            code = str(code_entry['code']).strip()
-                            if code and code != '0-0':
-                                unique_codes.add(code)
-
-                # 5. Format and reply result
-                if not unique_codes:
-                    reply_text = "✅ 分析完畢：未偵測到任何 Chassis Code。"
-                else:
-                    codes_str = ", ".join(sorted(list(unique_codes)))
-                    reply_text = f"🔍 診斷分析結果：\n偵測到的 Chassis Codes：\n{codes_str}"
-                
-                await line_bot_api.push_message(PushMessageRequest(to=user_id, messages=[TextMessage(text=reply_text)]))
-
-        except Exception as e:
-            print(f"Error in handle_file_message: {e}")
-            await line_bot_api.push_message(PushMessageRequest(
-                to=user_id, 
-                messages=[TextMessage(text=f"💥 處理檔案時發生錯誤：{str(e)}")]
-            ))
