@@ -13,7 +13,7 @@ app = FastAPI(title="Bus Quality Report System")
 # 包含所有 HTTP Methods 以確保 LINE Webhook（POST）不受影響
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],   # 上線後請改為具體 Vercel 網域，例如 ["https://busmap-xxx.vercel.app"]
+    allow_origins=["https://bus-map-smoky.vercel.app"],
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
