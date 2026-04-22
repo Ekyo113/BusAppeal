@@ -194,7 +194,7 @@ def fetch_bus_status(city_code: str) -> dict:
     reports_rows = (
         client.table("reports")
         .select("car_number, description, id, created_at")
-        .neq("status", "已處理")
+        .neq("status", "已完成")
         .execute()
         .data
     )
