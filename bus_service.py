@@ -298,7 +298,6 @@ def _fetch_tdx_realtime(city_code: str) -> list[dict]:
     url = f"{TDX_BASE_URL}/v2/Bus/RealTimeByFrequency/City/{city_code}"
     params = {
         "$format": "JSON",
-        "$select": "PlateNumb,RouteName,StopName,StopSequence,BusPosition",
     }
     headers = {"Authorization": f"Bearer {token}"}
 
