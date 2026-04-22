@@ -209,35 +209,44 @@ def fetch_bus_status(city_code: str) -> dict:
             if r["created_at"] > incident_map[cn]["created_at"]:
                 incident_map[cn] = r
 
-    # 3. 從 TDX 取得即時位置（A1 動態定時資料）
+    # 3. 從 TDX 取得即時位置（A1 動態定時資料）與 站點資訊（A2 定點資料）
     tdx_data = _fetch_tdx_realtime(city_code)
+    tdx_nearstop = _fetch_tdx_nearstop(city_code)
 
-    # 建立 plate → TDX record 的 mapping
+    # 建立 plate → TDX A1 record 的 mapping
     tdx_map: dict[str, dict] = {}
     for rec in tdx_data:
         plate = rec.get("PlateNumb", "").strip()
         if plate in monitored_plates:
             tdx_map[plate] = rec
 
+    # 建立 plate → TDX A2 近站資訊 的 mapping
+    nearstop_map: dict[str, dict] = {}
+    for rec in tdx_nearstop:
+        plate = rec.get("PlateNumb", "").strip()
+        if plate in monitored_plates:
+            nearstop_map[plate] = rec
+
     # 4. 整合每台車的狀態
     buses: list[dict] = []
     for plate, meta in monitored_plates.items():
         tdx_rec = tdx_map.get(plate)
+        ns_rec = nearstop_map.get(plate)
         incident = incident_map.get(plate)
 
-        if tdx_rec:
-            # 解析位置資訊
-            pos = tdx_rec.get("BusPosition", {}) or {}
+        if tdx_rec or ns_rec:
+            # 優先使用 A1 位置
+            pos = (tdx_rec or {}).get("BusPosition", {})
             lat = pos.get("PositionLat")
             lon = pos.get("PositionLon")
-            stop_name = tdx_rec.get("StopName", {}).get("Zh_tw", "")
-            stop_seq  = tdx_rec.get("StopSequence") or 0
-            route_name_tdx = (tdx_rec.get("RouteName") or {}).get("Zh_tw", "")
+            route_name_tdx = ((tdx_rec or ns_rec).get("RouteName") or {}).get("Zh_tw", "")
 
-            # 判斷是否為終點站（TDX 沒有直接欄位，用 StopSequence == max 判斷較複雜）
+            # 站點資訊從 A2 (RealTimeNearStop) 或是 A1 (如果有的話) 取
+            stop_name = (ns_rec or tdx_rec or {}).get("StopName", {}).get("Zh_tw", "")
+            stop_seq  = (ns_rec or tdx_rec or {}).get("StopSequence") or 0
+
             # 暫以 StopSequence <= 1 做起始站判斷
             is_terminal = (stop_seq <= 1)
-
             is_operating = True
 
             # 寫入 GPS 快照
@@ -306,10 +315,30 @@ def _fetch_tdx_realtime(city_code: str) -> list[dict]:
         resp.raise_for_status()
         return resp.json()
     except httpx.HTTPStatusError as e:
-        print(f"[BusService] TDX API error ({city_code}): {e.response.status_code}")
+        print(f"[BusService A1] TDX API error ({city_code}): {e.response.status_code}")
         return []
     except Exception as e:
-        print(f"[BusService] TDX fetch failed ({city_code}): {e}")
+        print(f"[BusService A1] TDX fetch failed ({city_code}): {e}")
+        return []
+
+def _fetch_tdx_nearstop(city_code: str) -> list[dict]:
+    """呼叫 TDX A2 公車定點資料 API 取得目前站點名稱。"""
+    token = _get_tdx_token()
+    url = f"{TDX_BASE_URL}/v2/Bus/RealTimeNearStop/City/{city_code}"
+    params = {
+        "$format": "JSON",
+    }
+    headers = {"Authorization": f"Bearer {token}"}
+
+    try:
+        resp = httpx.get(url, params=params, headers=headers, timeout=15)
+        resp.raise_for_status()
+        return resp.json()
+    except httpx.HTTPStatusError as e:
+        print(f"[BusService A2] TDX API error ({city_code}): {e.response.status_code}")
+        return []
+    except Exception as e:
+        print(f"[BusService A2] TDX fetch failed ({city_code}): {e}")
         return []
 
 
