@@ -215,7 +215,9 @@ def fetch_bus_status(city_code: str) -> dict:
     now = datetime.now(tz_taipei)
     if 8 <= now.hour < 23:
         tdx_data = _fetch_tdx_realtime(city_code)
-        tdx_nearstop = _fetch_tdx_nearstop(city_code)
+        # 節省 TDX token，暫停呼叫 A2 API，保留程式碼
+        # tdx_nearstop = _fetch_tdx_nearstop(city_code)
+        tdx_nearstop = []
     else:
         tdx_data = []
         tdx_nearstop = []
