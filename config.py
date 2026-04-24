@@ -23,6 +23,7 @@ class Config:
     
     # Admin settings
     ADMIN_SECRET_KEY = os.getenv("ADMIN_SECRET_KEY", "default_secret_key")
+    MAP_PASSWORD = os.getenv("MAP_PASSWORD", "")
     
     @classmethod
     def validate(cls):

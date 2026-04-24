@@ -169,7 +169,7 @@ def cleanup_old_gps_history():
 # 主要資料拉取與整合
 # ─────────────────────────────────────────
 
-def fetch_bus_status(city_code: str) -> dict:
+def fetch_bus_status(city_code: str, force_a2: bool = False) -> dict:
     """
     整合 TDX 即時公車動態 + Supabase 品情通報，
     回傳該城市所有受監控車輛的狀態清單。
@@ -215,9 +215,11 @@ def fetch_bus_status(city_code: str) -> dict:
     now = datetime.now(tz_taipei)
     if 8 <= now.hour < 23:
         tdx_data = _fetch_tdx_realtime(city_code)
-        # 節省 TDX token，暫停呼叫 A2 API，保留程式碼
-        # tdx_nearstop = _fetch_tdx_nearstop(city_code)
-        tdx_nearstop = []
+        # 節省 TDX token，只有在 force_a2 為 True 時才呼叫 A2 API
+        if force_a2:
+            tdx_nearstop = _fetch_tdx_nearstop(city_code)
+        else:
+            tdx_nearstop = []
     else:
         tdx_data = []
         tdx_nearstop = []
