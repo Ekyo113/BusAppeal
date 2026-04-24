@@ -179,7 +179,7 @@ def fetch_bus_status(city_code: str) -> dict:
     # 1. 取得受監控車輛清單
     monitored_rows = (
         client.table("monitored_buses")
-        .select("plate_number, route_name, vendor_name")
+        .select("id, plate_number, route_name, vendor_name, last_lat, last_lon, last_gps_time")
         .eq("city_code", city_code)
         .eq("is_active", True)
         .execute()
@@ -210,8 +210,15 @@ def fetch_bus_status(city_code: str) -> dict:
                 incident_map[cn] = r
 
     # 3. 從 TDX 取得即時位置（A1 動態定時資料）與 站點資訊（A2 定點資料）
-    tdx_data = _fetch_tdx_realtime(city_code)
-    tdx_nearstop = _fetch_tdx_nearstop(city_code)
+    # 限制更新時間：僅在 08:00 ~ 23:00 之間更新
+    tz_taipei = timezone(timedelta(hours=8))
+    now = datetime.now(tz_taipei)
+    if 8 <= now.hour < 23:
+        tdx_data = _fetch_tdx_realtime(city_code)
+        tdx_nearstop = _fetch_tdx_nearstop(city_code)
+    else:
+        tdx_data = []
+        tdx_nearstop = []
 
     # 建立 plate → TDX A1 record 的 mapping
     tdx_map: dict[str, dict] = {}
@@ -229,6 +236,7 @@ def fetch_bus_status(city_code: str) -> dict:
 
     # 4. 整合每台車的狀態
     buses: list[dict] = []
+    updates = []
     for plate, meta in monitored_plates.items():
         tdx_rec = tdx_map.get(plate)
         ns_rec = nearstop_map.get(plate)
@@ -251,11 +259,22 @@ def fetch_bus_status(city_code: str) -> dict:
 
             # 寫入 GPS 快照
             if lat and lon:
-                _save_gps_snapshot(city_code, plate, float(lat), float(lon),
+                lat_float = float(lat)
+                lon_float = float(lon)
+                _save_gps_snapshot(city_code, plate, lat_float, lon_float,
                                    stop_name, stop_seq, is_terminal)
                 bus_status, stalled_sec = _check_stall(
-                    city_code, plate, float(lat), float(lon), stop_seq, is_terminal
+                    city_code, plate, lat_float, lon_float, stop_seq, is_terminal
                 )
+                if lat_float != 0 and lon_float != 0:
+                    updates.append({
+                        "id": meta["id"],
+                        "city_code": city_code,
+                        "plate_number": plate,
+                        "last_lat": lat_float,
+                        "last_lon": lon_float,
+                        "last_gps_time": _now_iso()
+                    })
             else:
                 bus_status, stalled_sec = "operating", 0
         else:
@@ -279,6 +298,9 @@ def fetch_bus_status(city_code: str) -> dict:
             "stop_sequence":        stop_seq,
             "lat":                  float(lat) if lat else None,
             "lon":                  float(lon) if lon else None,
+            "last_lat":             meta.get("last_lat"),
+            "last_lon":             meta.get("last_lon"),
+            "last_gps_time":        meta.get("last_gps_time"),
             "is_operating":         is_operating,
             "status":               bus_status,          # operating | attention | not_operating | incident
             "stalled_seconds":      stalled_sec,
@@ -293,6 +315,13 @@ def fetch_bus_status(city_code: str) -> dict:
 
     # 6. 清理過舊 GPS 快照
     cleanup_old_gps_history()
+
+    # 7. 批次更新最後有效 GPS 到資料庫
+    if updates:
+        try:
+            client.table("monitored_buses").upsert(updates).execute()
+        except Exception as e:
+            print(f"[BusService] Failed to upsert last GPS: {e}")
 
     return {
         "city_code":  city_code,
