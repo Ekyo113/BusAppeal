@@ -179,7 +179,7 @@ def fetch_bus_status(city_code: str, force_a2: bool = False) -> dict:
     # 1. 取得受監控車輛清單
     monitored_rows = (
         client.table("monitored_buses")
-        .select("id, plate_number, route_name, vendor_name, last_lat, last_lon, last_gps_time")
+        .select("id, plate_number, route_name, vendor_name, last_lat, last_lon, last_gps_time, last_stop_name")
         .eq("city_code", city_code)
         .eq("is_active", True)
         .execute()
@@ -254,7 +254,17 @@ def fetch_bus_status(city_code: str, force_a2: bool = False) -> dict:
             route_name_tdx = ((tdx_rec or ns_rec).get("RouteName") or {}).get("Zh_tw", "")
 
             # 站點資訊從 A2 (RealTimeNearStop) 或是 A1 (如果有的話) 取
-            stop_name = (ns_rec or tdx_rec or {}).get("StopName", {}).get("Zh_tw", "")
+            cur_stop = ""
+            rec_for_stop = ns_rec or tdx_rec or {}
+            stop_name_raw = rec_for_stop.get("StopName")
+            if isinstance(stop_name_raw, dict):
+                cur_stop = stop_name_raw.get("Zh_tw", "")
+            elif isinstance(stop_name_raw, str):
+                cur_stop = stop_name_raw
+
+            # 如果目前沒抓到站點（例如公車在站間或未更新 A2），則沿用資料庫中的最後紀錄
+            stop_name = cur_stop or meta.get("last_stop_name") or ""
+            
             stop_seq  = (ns_rec or tdx_rec or {}).get("StopSequence") or 0
 
             # 暫以 StopSequence <= 1 做起始站判斷
@@ -271,14 +281,17 @@ def fetch_bus_status(city_code: str, force_a2: bool = False) -> dict:
                     city_code, plate, lat_float, lon_float, stop_seq, is_terminal
                 )
                 if lat_float != 0 and lon_float != 0:
-                    updates.append({
+                    update_item = {
                         "id": meta["id"],
                         "city_code": city_code,
                         "plate_number": plate,
                         "last_lat": lat_float,
                         "last_lon": lon_float,
                         "last_gps_time": _now_iso()
-                    })
+                    }
+                    if cur_stop:
+                        update_item["last_stop_name"] = cur_stop
+                    updates.append(update_item)
             else:
                 bus_status, stalled_sec = "operating", 0
         else:
