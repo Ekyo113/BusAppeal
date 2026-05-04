@@ -8,8 +8,32 @@ from linebot.v3.messaging import (
     PushMessageRequest,
     TextMessage
 )
+from datetime import datetime
+import pytz
 
 router = APIRouter(prefix="/admin")
+
+@router.get("/weekly_gps_log")
+async def get_weekly_gps_log(date: str = None, token: str = Header(None)):
+    verify_token(token)
+    if not date:
+        tz = pytz.timezone('Asia/Taipei')
+        date = datetime.now(tz).strftime('%Y-%m-%d')
+        
+    client = Database.get_client()
+    
+    start_time = f"{date}T00:00:00+08:00"
+    end_time = f"{date}T23:59:59+08:00"
+    
+    response = client.table("weekly_bus_gps_log")\
+        .select("*")\
+        .gte("recorded_at", start_time)\
+        .lte("recorded_at", end_time)\
+        .order("plate_number")\
+        .order("recorded_at")\
+        .execute()
+        
+    return response.data
 
 def verify_token(token: str):
     if token != Config.ADMIN_SECRET_KEY:

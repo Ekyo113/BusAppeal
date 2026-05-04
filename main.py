@@ -6,8 +6,53 @@ from line_handler import handle_callback
 from admin_router import router as admin_router
 from config import Config
 import bus_service
+from contextlib import asynccontextmanager
+from apscheduler.schedulers.background import BackgroundScheduler
+import pytz
+from datetime import datetime
 
-app = FastAPI(title="Bus Quality Report System")
+def collect_weekly_bus_data():
+    tz = pytz.timezone('Asia/Taipei')
+    now = datetime.now(tz)
+    
+    # Check if between 05:30 and 23:30 (5/5 ~ 5/12)
+    if now.month == 5 and 5 <= now.day <= 12:
+        minutes = now.hour * 60 + now.minute
+        if 5 * 60 + 30 <= minutes <= 23 * 60 + 30:
+            try:
+                from database import Database
+                data = bus_service.fetch_bus_status("Tainan", force_a2=False)
+                buses = data.get("buses", [])
+                
+                records = []
+                for bus in buses:
+                    if bus.get("lat") and bus.get("lon"):
+                        records.append({
+                            "plate_number": bus["plate_number"],
+                            "route_name": bus["route_name"],
+                            "lat": bus["lat"],
+                            "lon": bus["lon"],
+                            "recorded_at": now.isoformat()
+                        })
+                
+                if records:
+                    client = Database.get_client()
+                    client.table("weekly_bus_gps_log").insert(records).execute()
+                    print(f"[WeeklyBusData] Inserted {len(records)} bus GPS records.")
+            except Exception as e:
+                import traceback
+                print(f"[WeeklyBusData] Error collecting weekly bus data:")
+                traceback.print_exc()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    scheduler = BackgroundScheduler(timezone=pytz.timezone('Asia/Taipei'))
+    scheduler.add_job(collect_weekly_bus_data, 'cron', minute='0,20,40')
+    scheduler.start()
+    yield
+    scheduler.shutdown()
+
+app = FastAPI(title="Bus Quality Report System", lifespan=lifespan)
 
 # CORS — 允許 Vercel 前端跨域呼叫 /bus/* 端點
 # 包含所有 HTTP Methods 以確保 LINE Webhook（POST）不受影響

@@ -6,6 +6,7 @@
     <title>公車品情通報系統 - 管理後台</title>
     <link rel="stylesheet" href="/static/style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 </head>
 <body class="bg-dark">
     <!-- Login Overlay -->
@@ -41,9 +42,16 @@
             </div>
         </header>
 
+        <div class="tabs-container">
+            <button class="tab-btn active" onclick="switchTab('tab-reports')">通報管理</button>
+            <button class="tab-btn" onclick="switchTab('tab-gps')">車輛每日紀錄</button>
+        </div>
+
         <main>
-            <div class="dashboard-grid">
-                <!-- Sidebar Stats -->
+            <!-- Tab: Reports -->
+            <div id="tab-reports" class="tab-content active">
+                <div class="dashboard-grid">
+                    <!-- Sidebar Stats -->
                 <aside class="stats-panel">
                     <div class="stat-card" data-status="pending">
                         <span class="label">待處理</span>
@@ -83,6 +91,23 @@
                         </table>
                     </div>
                 </section>
+            </div>
+            </div>
+
+            <!-- Tab: GPS Log -->
+            <div id="tab-gps" class="tab-content hidden">
+                <div class="gps-section">
+                    <div class="gps-header">
+                        <h2>🚌 車輛每日 GPS 紀錄 (05:30 - 23:30)</h2>
+                        <div class="gps-controls">
+                            <input type="date" id="gps-date-picker" onchange="loadGPSLog()">
+                            <button class="btn-primary" onclick="loadGPSLog()">重新查詢</button>
+                        </div>
+                    </div>
+                    <div class="gps-chart-container">
+                        <div id="gps-timeline-chart"></div>
+                    </div>
+                </div>
             </div>
         </main>
     </div>

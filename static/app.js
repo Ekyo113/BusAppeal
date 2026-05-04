@@ -278,3 +278,148 @@ async function markDone(id) {
 function closeModal() {
     document.getElementById('modal').classList.add('hidden');
 }
+
+// --- GPS Tab Logic ---
+let gpsChart = null;
+
+function switchTab(tabId) {
+    // Update active class on buttons
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.getAttribute('onclick').includes(tabId)) {
+            btn.classList.add('active');
+        }
+    });
+
+    // Show/Hide tabs
+    document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.add('hidden');
+        content.classList.remove('active');
+    });
+    
+    document.getElementById(tabId).classList.remove('hidden');
+    document.getElementById(tabId).classList.add('active');
+
+    if (tabId === 'tab-gps') {
+        const datePicker = document.getElementById('gps-date-picker');
+        if (!datePicker.value) {
+            // Set default date to today
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            const dd = String(today.getDate()).padStart(2, '0');
+            datePicker.value = `${yyyy}-${mm}-${dd}`;
+        }
+        loadGPSLog();
+    }
+}
+
+async function loadGPSLog() {
+    const tokenInput = document.getElementById('admin-token');
+    const token = tokenInput.value.trim();
+    const date = document.getElementById('gps-date-picker').value;
+
+    if (!token) return;
+
+    try {
+        const response = await fetch(`/admin/weekly_gps_log?date=${date}`, {
+            headers: { 'token': token }
+        });
+
+        if (!response.ok) throw new Error("API Error");
+
+        const logs = await response.json();
+        renderGPSChart(logs, date);
+    } catch (error) {
+        console.error("Failed to load GPS logs", error);
+        showToast("無法載入 GPS 紀錄", "error");
+    }
+}
+
+function renderGPSChart(logs, dateStr) {
+    const container = document.getElementById('gps-timeline-chart');
+    container.innerHTML = '';
+
+    if (!logs || logs.length === 0) {
+        container.innerHTML = `<div class="loading-state">此日期無任何車輛 GPS 紀錄。</div>`;
+        return;
+    }
+
+    // Process data for ApexCharts rangeBar
+    // We group by plate_number
+    const seriesData = [];
+    
+    logs.forEach(log => {
+        const start = new Date(log.recorded_at).getTime();
+        // Since we collect every 20 mins, we draw a 20-min block for visualization
+        const end = start + 20 * 60 * 1000; 
+        
+        seriesData.push({
+            x: `${log.plate_number}\n(${log.route_name})`,
+            y: [start, end]
+        });
+    });
+
+    // Set chart min/max to 05:30 - 23:30 of the selected date
+    const minTime = new Date(`${dateStr}T05:30:00+08:00`).getTime();
+    const maxTime = new Date(`${dateStr}T23:30:00+08:00`).getTime();
+
+    const options = {
+        series: [
+            {
+                name: 'GPS 紀錄',
+                data: seriesData
+            }
+        ],
+        chart: {
+            height: Math.max(500, Object.keys(logs).length * 10), // Adjust height based on number of records roughly
+            type: 'rangeBar',
+            background: 'transparent',
+            toolbar: { show: false }
+        },
+        plotOptions: {
+            bar: {
+                horizontal: true,
+                barHeight: '50%',
+                borderRadius: 4
+            }
+        },
+        colors: ['#0ea5e9'],
+        xaxis: {
+            type: 'datetime',
+            min: minTime,
+            max: maxTime,
+            labels: {
+                datetimeUTC: false,
+                format: 'HH:mm',
+                style: { colors: '#94a3b8' }
+            },
+            axisBorder: { show: false },
+            axisTicks: { show: false }
+        },
+        yaxis: {
+            labels: {
+                style: { colors: '#f8fafc', fontSize: '12px', fontFamily: 'Outfit' }
+            }
+        },
+        grid: {
+            borderColor: '#334155',
+            strokeDashArray: 4,
+            xaxis: { lines: { show: true } },
+            yaxis: { lines: { show: false } }
+        },
+        theme: { mode: 'dark' },
+        tooltip: {
+            x: {
+                format: 'HH:mm'
+            }
+        }
+    };
+
+    if (gpsChart) {
+        gpsChart.destroy();
+    }
+
+    gpsChart = new ApexCharts(document.querySelector("#gps-timeline-chart"), options);
+    gpsChart.render();
+}

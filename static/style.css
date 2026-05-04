@@ -485,3 +485,77 @@ main {
 }
 .toast-success { border-left: 4px solid var(--done); }
 .toast-error { border-left: 4px solid #ef4444; }
+
+/* Tabs Container */
+.tabs-container {
+    display: flex;
+    gap: 1rem;
+    padding: 0 2rem;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+}
+
+.tab-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    padding: 1rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    transition: all 0.2s;
+}
+
+.tab-btn:hover {
+    color: var(--text);
+}
+
+.tab-btn.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+}
+
+/* GPS Section */
+.gps-section {
+    background: var(--surface);
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    padding: 2rem;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+}
+
+.gps-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+.gps-controls {
+    display: flex;
+    gap: 1rem;
+}
+
+.gps-controls input[type="date"] {
+    background: var(--surface-light);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 0.9rem;
+}
+
+.gps-controls input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+}
+
+.gps-chart-container {
+    width: 100%;
+    min-height: 500px;
+    background: var(--surface-light);
+    border-radius: 12px;
+    padding: 1rem;
+    border: 1px solid var(--border);
+}
