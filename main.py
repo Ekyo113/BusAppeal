@@ -15,39 +15,38 @@ def collect_weekly_bus_data():
     tz = pytz.timezone('Asia/Taipei')
     now = datetime.now(tz)
     
-    # Check if between 05:30 and 23:30 (5/5 ~ 5/12)
-    if now.month == 5 and 5 <= now.day <= 12:
-        minutes = now.hour * 60 + now.minute
-        if 5 * 60 + 30 <= minutes <= 23 * 60 + 30:
-            try:
-                from database import Database
-                data = bus_service.fetch_bus_status("Tainan", force_a2=False)
-                buses = data.get("buses", [])
-                
-                records = []
-                for bus in buses:
-                    if bus.get("lat") and bus.get("lon"):
-                        records.append({
-                            "plate_number": bus["plate_number"],
-                            "route_name": bus["route_name"],
-                            "lat": bus["lat"],
-                            "lon": bus["lon"],
-                            "recorded_at": now.isoformat()
-                        })
-                
-                if records:
-                    client = Database.get_client()
-                    client.table("weekly_bus_gps_log").insert(records).execute()
-                    print(f"[WeeklyBusData] Inserted {len(records)} bus GPS records.")
-            except Exception as e:
-                import traceback
-                print(f"[WeeklyBusData] Error collecting weekly bus data:")
-                traceback.print_exc()
+    # Check if between 07:00 and 23:00 (Continuous Daily)
+    minutes = now.hour * 60 + now.minute
+    if 7 * 60 <= minutes <= 23 * 60:
+        try:
+            from database import Database
+            data = bus_service.fetch_bus_status("Tainan", force_a2=False)
+            buses = data.get("buses", [])
+            
+            records = []
+            for bus in buses:
+                if bus.get("lat") and bus.get("lon"):
+                    records.append({
+                        "plate_number": bus["plate_number"],
+                        "route_name": bus["route_name"],
+                        "lat": bus["lat"],
+                        "lon": bus["lon"],
+                        "recorded_at": now.isoformat()
+                    })
+            
+            if records:
+                client = Database.get_client()
+                client.table("weekly_bus_gps_log").insert(records).execute()
+                print(f"[WeeklyBusData] Inserted {len(records)} bus GPS records.")
+        except Exception as e:
+            import traceback
+            print(f"[WeeklyBusData] Error collecting weekly bus data:")
+            traceback.print_exc()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     scheduler = BackgroundScheduler(timezone=pytz.timezone('Asia/Taipei'))
-    scheduler.add_job(collect_weekly_bus_data, 'cron', minute='0,20,40')
+    scheduler.add_job(collect_weekly_bus_data, 'cron', minute='*/5')
     scheduler.start()
     yield
     scheduler.shutdown()

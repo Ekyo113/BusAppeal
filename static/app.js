@@ -351,8 +351,8 @@ function renderGPSChart(logs, dateStr) {
     
     logs.forEach(log => {
         const start = new Date(log.recorded_at).getTime();
-        // Since we collect every 20 mins, we draw a 20-min block for visualization
-        const end = start + 20 * 60 * 1000; 
+        // Since we collect every 5 mins, we draw a 5-min block for visualization
+        const end = start + 5 * 60 * 1000; 
         
         seriesData.push({
             x: `${log.plate_number}\n(${log.route_name})`,
@@ -360,9 +360,9 @@ function renderGPSChart(logs, dateStr) {
         });
     });
 
-    // Set chart min/max to 05:30 - 23:30 of the selected date
-    const minTime = new Date(`${dateStr}T05:30:00+08:00`).getTime();
-    const maxTime = new Date(`${dateStr}T23:30:00+08:00`).getTime();
+    // Set chart min/max to 07:00 - 23:00 of the selected date
+    const minTime = new Date(`${dateStr}T07:00:00+08:00`).getTime();
+    const maxTime = new Date(`${dateStr}T23:00:00+08:00`).getTime();
 
     const options = {
         series: [
