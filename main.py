@@ -46,12 +46,6 @@ def collect_weekly_bus_data():
                 client = Database.get_client()
                 client.table("weekly_bus_gps_log").insert(records).execute()
                 print(f"[WeeklyBusData] Inserted {len(records)} Tainan bus GPS records.")
-            
-            # 5-day retention cleanup
-            cutoff = (now - timedelta(days=5)).isoformat()
-            client = Database.get_client()
-            client.table("weekly_bus_gps_log").delete().lt("recorded_at", cutoff).execute()
-            print(f"[WeeklyBusData] Cleaned up records older than {cutoff}")
 
         except Exception as e:
             import traceback
