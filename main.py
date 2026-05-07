@@ -15,6 +15,13 @@ def collect_weekly_bus_data():
     tz = pytz.timezone('Asia/Taipei')
     now = datetime.now(tz)
     
+    # Only record between 2026-05-08 and 2026-05-15
+    start_date = datetime(2026, 5, 8, tzinfo=tz)
+    end_date = datetime(2026, 5, 15, 23, 59, 59, tzinfo=tz)
+    
+    if not (start_date <= now <= end_date):
+        return
+
     # Check if between 05:30 and 23:00 (Continuous Daily)
     minutes = now.hour * 60 + now.minute
     if (5 * 60 + 30) <= minutes <= (23 * 60):
