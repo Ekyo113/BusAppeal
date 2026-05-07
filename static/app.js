@@ -77,9 +77,12 @@ function renderReports() {
             '已完成': 'done'
         };
         const statusClass = statusMap[report.status] || 'pending';
-        const timeStr = new Date(report.created_at).toLocaleString('zh-TW', { 
+        const createdTimeStr = new Date(report.created_at).toLocaleString('zh-TW', { 
             month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false 
         });
+        const completedTimeStr = report.completed_at ? new Date(report.completed_at).toLocaleString('zh-TW', { 
+            month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false 
+        }) : '-';
 
         row.innerHTML = `
             <td class="row-index">${index + 1}</td>
@@ -87,7 +90,9 @@ function renderReports() {
             <td class="cell-car">${report.car_number}</td>
             <td class="cell-desc">${report.description}</td>
             <td class="cell-sol">${report.solution || '-'}</td>
-            <td class="cell-time">${timeStr}</td>
+            <td class="cell-mileage">${report.mileage || '-'}</td>
+            <td class="cell-time">${createdTimeStr}</td>
+            <td class="cell-time">${completedTimeStr}</td>
             <td class="table-actions">
                 <button onclick="event.stopPropagation(); viewDetail('${report.id}')">詳情</button>
                 ${report.status !== '已完成' ? `<button class="btn-primary" onclick="event.stopPropagation(); markDone('${report.id}')">完成</button>` : ''}
@@ -108,9 +113,10 @@ function viewDetail(id) {
     const solutionDisplay = document.getElementById('solution-display');
     const solutionInput = document.getElementById('solution-input');
     
-    // Set solution
+    // Set solution & mileage
     solutionDisplay.innerText = report.solution || "暫無處理紀錄";
     solutionInput.value = report.solution || "";
+    document.getElementById('mileage-input').value = report.mileage || "";
 
     let mediaHtml = '';
     if (report.media_urls && report.media_urls.length > 0) {
@@ -139,10 +145,15 @@ function viewDetail(id) {
             </div>
             
             <div class="detail-row">
-                <label>通報時間</label>
-                <p>${new Date(report.created_at).toLocaleString('zh-TW')}</p>
+                <label>通報時間 / 完成時間</label>
+                <p>${new Date(report.created_at).toLocaleString('zh-TW')} / ${report.completed_at ? new Date(report.completed_at).toLocaleString('zh-TW') : '尚未完成'}</p>
             </div>
             
+            <div class="detail-row">
+                <label>目前里程</label>
+                <p>${report.mileage ? report.mileage + ' KM' : '尚未填寫'}</p>
+            </div>
+
             <div class="detail-row">
                 <label>問題描述</label>
                 <p>${report.description}</p>
@@ -163,6 +174,8 @@ function viewDetail(id) {
 async function saveSolution() {
     if (!currentReportId) return;
     const solution = document.getElementById('solution-input').value.trim();
+    const mileage = document.getElementById('mileage-input').value.trim();
+    
     if (!solution) {
         showToast("請輸入方案內容", "error");
         return;
@@ -176,13 +189,14 @@ async function saveSolution() {
                 'token': token,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ solution })
+            body: JSON.stringify({ solution, mileage })
         });
         if (response.ok) {
-            showToast("方案已儲存");
+            showToast("方案與里程已儲存");
             // Update local data
-            allReports = allReports.map(r => r.id === currentReportId ? { ...r, solution } : r);
+            allReports = allReports.map(r => r.id === currentReportId ? { ...r, solution, mileage } : r);
             document.getElementById('solution-display').innerText = solution;
+            renderReports(); // Refresh table to show new mileage
         } else {
             showToast("儲存失敗", "error");
         }
@@ -229,7 +243,7 @@ function showToast(message, type = 'success') {
     }, 3000);
 }
 
-async function updateStatus(id, status) {
+async function updateStatus(id, status, mileage = null) {
     const token = document.getElementById('admin-token').value;
     try {
         const response = await fetch(`/admin/reports/${id}`, {
@@ -238,10 +252,17 @@ async function updateStatus(id, status) {
                 'token': token,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ status })
+            body: JSON.stringify({ status, mileage })
         });
         if (response.ok) {
-            allReports = allReports.map(r => r.id === id ? { ...r, status } : r);
+            // Need to fetch again or update locally with completion time
+            // For simplicity, let's just refresh or update locally if we know what changed
+            if (status === '已完成') {
+                const now = new Date().toISOString();
+                allReports = allReports.map(r => r.id === id ? { ...r, status, mileage: mileage || r.mileage, completed_at: now } : r);
+            } else {
+                allReports = allReports.map(r => r.id === id ? { ...r, status } : r);
+            }
             renderReports();
             updateStats();
             if (!document.getElementById('modal').classList.contains('hidden')) {
@@ -254,7 +275,8 @@ async function updateStatus(id, status) {
 }
 
 async function markDone(id) {
-    if (!confirm("確定維修完成並要通知駕駛嗎？")) return;
+    const mileage = prompt("請輸入維修完成時的里程 (選填):", "");
+    if (mileage === null) return; // Cancelled
     
     const token = document.getElementById('admin-token').value;
     try {
@@ -264,8 +286,8 @@ async function markDone(id) {
         });
         
         if (response.ok) {
-            await updateStatus(id, '已完成');
-            showToast("已更新狀態並發送通知！");
+            await updateStatus(id, '已完成', mileage);
+            showToast("已更新狀態、里程並發送通知！");
             closeModal();
         } else {
             showToast("發送通知失敗", "error");

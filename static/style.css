@@ -281,7 +281,7 @@ main {
 }
 
 .cell-desc, .cell-sol {
-    max-width: 300px; /* Reduced from 500 to fit both columns */
+    max-width: 200px; /* Reduced to fit more columns */
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

@@ -83,21 +83,32 @@ class Database:
         return client.table("reports").delete().eq("id", report_id).execute()
 
     @classmethod
-    def update_report_status(cls, report_id: str, status: str):
+    def update_report_status(cls, report_id: str, status: str, mileage: str = None):
         client = cls.get_client()
-        return client.table("reports").update({
+        update_data = {
             "status": status,
             "updated_at": datetime.utcnow().isoformat()
-        }).eq("id", report_id).execute()
+        }
+        
+        if status == "已完成":
+            update_data["completed_at"] = datetime.utcnow().isoformat()
+            if mileage:
+                update_data["mileage"] = mileage
+                
+        return client.table("reports").update(update_data).eq("id", report_id).execute()
 
     @classmethod
-    def update_report_solution(cls, report_id: str, solution: str):
+    def update_report_solution(cls, report_id: str, solution: str, mileage: str = None):
         client = cls.get_client()
-        return client.table("reports").update({
+        update_data = {
             "solution": solution,
             "solution_at": datetime.utcnow().isoformat(),
             "updated_at": datetime.utcnow().isoformat()
-        }).eq("id", report_id).execute()
+        }
+        if mileage:
+            update_data["mileage"] = mileage
+            
+        return client.table("reports").update(update_data).eq("id", report_id).execute()
 
     @classmethod
     def upload_media(cls, file_content: bytes, file_name: str, content_type: str):

@@ -49,7 +49,8 @@ async def get_reports(token: str = Header(None)):
 async def update_status(report_id: str, data: dict = Body(...), token: str = Header(None)):
     verify_token(token)
     status = data.get("status")
-    Database.update_report_status(report_id, status)
+    mileage = data.get("mileage")
+    Database.update_report_status(report_id, status, mileage)
     return {"status": "success"}
 
 @router.delete("/reports/{report_id}")
@@ -62,7 +63,8 @@ async def delete_report(report_id: str, token: str = Header(None)):
 async def update_solution(report_id: str, data: dict = Body(...), token: str = Header(None)):
     verify_token(token)
     solution = data.get("solution")
-    Database.update_report_solution(report_id, solution)
+    mileage = data.get("mileage")
+    Database.update_report_solution(report_id, solution, mileage)
     return {"status": "success"}
 
 @router.post("/reports/{report_id}/notify")
