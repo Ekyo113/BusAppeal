@@ -59,7 +59,7 @@ async def handle_text_message(event):
     print(f"DEBUG: Message source type: {source_type}, source ID: {source_id}")
 
     # ── 管理群訊息處理 ──
-    admin_group_ids = [gid.strip() for gid in (Config.LINE_NOTIFY_ID or "").split(",") if gid.strip()]
+    admin_group_ids = [gid.strip() for gid in (Config.LINE_RECEIVE_ID or "").split(",") if gid.strip()]
     if source_type == "group" and source_id in admin_group_ids:
         await handle_group_message(event, user_id, source_id, text)
         return
