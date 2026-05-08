@@ -98,17 +98,72 @@ class Database:
         return client.table("reports").update(update_data).eq("id", report_id).execute()
 
     @classmethod
-    def update_report_solution(cls, report_id: str, solution: str, mileage: str = None):
+    def get_pending_reports_by_car(cls, car_number: str) -> list:
+        """查詢指定車號的所有未完成通報（狀態不為「已完成」）"""
+        client = cls.get_client()
+        try:
+            response = (
+                client.table("reports")
+                .select("id, car_number, description, status, created_at")
+                .eq("car_number", car_number)
+                .neq("status", "已完成")
+                .order("created_at", desc=False)
+                .execute()
+            )
+            return response.data
+        except Exception as e:
+            print(f"Database Error in get_pending_reports_by_car: {e}")
+            return []
+
+    @classmethod
+    def update_report_solution(cls, report_id: str, solution: str, mileage: str = None,
+                                handler_id: str = None, handler_name: str = "市場組",
+                                solution_type: str = None):
         client = cls.get_client()
         update_data = {
             "solution": solution,
             "solution_at": datetime.utcnow().isoformat(),
-            "updated_at": datetime.utcnow().isoformat()
+            "status": "已完成",
+            "completed_at": datetime.utcnow().isoformat(),
+            "updated_at": datetime.utcnow().isoformat(),
+            "handler_name": handler_name,
         }
         if mileage:
             update_data["mileage"] = mileage
-            
+        if handler_id:
+            update_data["handler_id"] = handler_id
+        if solution_type:
+            update_data["solution_type"] = solution_type
+
         return client.table("reports").update(update_data).eq("id", report_id).execute()
+
+    @classmethod
+    def create_completed_report_from_group(
+        cls, car_number: str, solution: str, mileage: str = None,
+        handler_id: str = None, handler_name: str = "市場組",
+        solution_type: str = None
+    ):
+        """直接從管理群新建一筆已完成通報（無對應待處理項目時使用）"""
+        client = cls.get_client()
+        now = datetime.utcnow().isoformat()
+        report = {
+            "car_number": car_number,
+            "description": f"[管理群直接完成] {solution}",
+            "ai_summary": solution[:20],
+            "solution": solution,
+            "solution_type": solution_type or "維修",
+            "status": "已完成",
+            "handler_name": handler_name,
+            "solution_at": now,
+            "completed_at": now,
+            "created_at": now,
+            "updated_at": now,
+        }
+        if mileage:
+            report["mileage"] = mileage
+        if handler_id:
+            report["handler_id"] = handler_id
+        return client.table("reports").insert(report).execute()
 
     @classmethod
     def upload_media(cls, file_content: bytes, file_name: str, content_type: str):

@@ -290,6 +290,27 @@ main {
 
 .cell-time { color: var(--text-muted); font-size: 0.85rem; }
 
+/* Solution Type Label */
+.sol-type-label {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    border-radius: 99px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+}
+.sol-type-label.sol-replace {
+    background: rgba(249, 115, 22, 0.15);
+    color: #fb923c;
+    border: 1px solid rgba(249, 115, 22, 0.3);
+}
+.sol-type-label.sol-repair {
+    background: rgba(14, 165, 233, 0.15);
+    color: #38bdf8;
+    border: 1px solid rgba(14, 165, 233, 0.3);
+}
+
+
 /* Table Actions */
 .table-actions {
     display: flex;

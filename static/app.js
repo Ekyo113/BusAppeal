@@ -84,13 +84,18 @@ function renderReports() {
             month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false 
         }) : '-';
 
+        const solType = report.solution_type || '-';
+        const solTypeClass = report.solution_type === '更換' ? 'sol-replace' : report.solution_type === '維修' ? 'sol-repair' : '';
+
         row.innerHTML = `
             <td class="row-index">${index + 1}</td>
             <td><span class="status-label ${statusClass}">${report.status}</span></td>
             <td class="cell-car">${report.car_number}</td>
             <td class="cell-desc">${report.description}</td>
             <td class="cell-sol">${report.solution || '-'}</td>
+            <td><span class="sol-type-label ${solTypeClass}">${solType}</span></td>
             <td class="cell-mileage">${report.mileage || '-'}</td>
+            <td>${report.handler_name || '-'}</td>
             <td class="cell-time">${createdTimeStr}</td>
             <td class="cell-time">${completedTimeStr}</td>
             <td class="table-actions">
@@ -139,8 +144,9 @@ function viewDetail(id) {
         <div class="modal-body-content">
             <div class="detail-header">
                 <h2 style="margin-bottom:1rem; color:var(--primary);">車號 # ${report.car_number}</h2>
-                <div style="margin-bottom:1.5rem">
+                <div style="margin-bottom:1.5rem; display:flex; gap:.5rem; align-items:center;">
                     <span class="status-label ${report.status === '待處理' ? 'pending' : report.status === '維修中' ? 'progress' : 'done'}">${report.status}</span>
+                    ${report.solution_type ? `<span class="sol-type-label ${report.solution_type === '更換' ? 'sol-replace' : 'sol-repair'}">${report.solution_type}</span>` : ''}
                 </div>
             </div>
             
@@ -152,6 +158,11 @@ function viewDetail(id) {
             <div class="detail-row">
                 <label>目前里程</label>
                 <p>${report.mileage ? report.mileage + ' KM' : '尚未填寫'}</p>
+            </div>
+
+            <div class="detail-row">
+                <label>處理人員</label>
+                <p>${report.handler_name || '尚未填寫'}</p>
             </div>
 
             <div class="detail-row">

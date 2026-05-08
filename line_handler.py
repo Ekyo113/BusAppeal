@@ -10,6 +10,7 @@ from linebot.v3.messaging import (
     QuickReply,
     QuickReplyItem,
     PostbackAction,
+    MessageAction,
     PushMessageRequest
 )
 from linebot.v3.webhooks import (
@@ -23,11 +24,14 @@ from linebot.v3.webhook import WebhookParser
 import httpx
 from config import Config
 from database import Database
+from ai_service import AIService
 import uuid
 import asyncio
+import json
 
 configuration = Configuration(access_token=Config.LINE_CHANNEL_ACCESS_TOKEN)
 parser = WebhookParser(Config.LINE_CHANNEL_SECRET)
+ai_service = AIService()
 
 async def handle_callback(body: str, signature: str):
     try:
@@ -53,6 +57,12 @@ async def handle_text_message(event):
     source_type = event.source.type
     source_id = getattr(event.source, "group_id", getattr(event.source, "room_id", user_id))
     print(f"DEBUG: Message source type: {source_type}, source ID: {source_id}")
+
+    # ── 管理群訊息處理 ──
+    admin_group_ids = [gid.strip() for gid in (Config.LINE_NOTIFY_ID or "").split(",") if gid.strip()]
+    if source_type == "group" and source_id in admin_group_ids:
+        await handle_group_message(event, user_id, source_id, text)
+        return
 
     # [NEW] Check if this is a private chat. If not, don't trigger the flow.
     if source_type != "user":
@@ -154,6 +164,114 @@ async def handle_text_message(event):
         elif step == "CONFIRM":
             await save_and_notify(user_id, temp_data, line_bot_api, event.reply_token)
 
+async def handle_group_message(event, sender_user_id: str, group_id: str, text: str):
+    """處理管理群發送的維修結果訊息，自動更新對應通報單。"""
+    async with AsyncApiClient(configuration) as api_client:
+        line_bot_api = AsyncMessagingApi(api_client)
+
+        parsed_items = await ai_service.parse_group_message(text)
+
+        if not parsed_items:
+            await line_bot_api.reply_message(ReplyMessageRequest(
+                reply_token=event.reply_token,
+                messages=[TextMessage(text="⚠️ 無法解析訊息內容，請確認格式（車號 + 里程 + 處理方案）。")]
+            ))
+            return
+
+        reply_lines = []
+        deferred_choices = []  # 需要多筆選擇的項目
+
+        for item in parsed_items:
+            car_number = item.get("car_number", "").strip()
+            mileage    = item.get("mileage", "").strip()
+            solution   = item.get("solution", "").strip()
+            sol_type   = item.get("solution_type", "維修").strip()
+
+            if not car_number or not solution:
+                reply_lines.append(f"⚠️ 無法識別某筆資料，請重新確認。")
+                continue
+
+            pending = Database.get_pending_reports_by_car(car_number)
+
+            if len(pending) == 0:
+                # 規則7：無待處理項目 → 直接新建已完成通報
+                Database.create_completed_report_from_group(
+                    car_number=car_number, solution=solution, mileage=mileage,
+                    handler_id=sender_user_id, solution_type=sol_type
+                )
+                reply_lines.append(f"✅ {car_number}：已新增並完成（{sol_type}）\n   方案：{solution}" + (f"\n   里程：{mileage} km" if mileage else ""))
+
+            elif len(pending) == 1:
+                # 只有一筆 → 直接更新
+                Database.update_report_solution(
+                    report_id=pending[0]["id"], solution=solution, mileage=mileage,
+                    handler_id=sender_user_id, solution_type=sol_type
+                )
+                reply_lines.append(f"✅ {car_number}：已完成（{sol_type}）\n   方案：{solution}" + (f"\n   里程：{mileage} km" if mileage else ""))
+
+            else:
+                # 多筆 → 暫存，等用戶選擇
+                deferred_choices.append({
+                    "car_number": car_number,
+                    "mileage": mileage,
+                    "solution": solution,
+                    "solution_type": sol_type,
+                    "pending": pending,
+                    "sender_user_id": sender_user_id
+                })
+
+        # 先回覆已完成的結果
+        if reply_lines and not deferred_choices:
+            await line_bot_api.reply_message(ReplyMessageRequest(
+                reply_token=event.reply_token,
+                messages=[TextMessage(text="\n\n".join(reply_lines))]
+            ))
+        elif deferred_choices:
+            # 有需要選擇的項目：先存入 conversation_state，再發選單
+            first = deferred_choices[0]
+            pending = first["pending"]
+            car = first["car_number"]
+
+            # 將所有資訊存入 state（用 group_id 當 key）
+            state_payload = {
+                "pending_choice": first,
+                "remaining": deferred_choices[1:],
+                "done_lines": reply_lines
+            }
+            Database.update_user_state(group_id, "GROUP_CHOOSE", state_payload)
+
+            choice_text = f"🔧 {car} 有 {len(pending)} 筆未完成項目，請選擇要更新哪一筆："
+            qr_items = []
+            labels = "abcdefghij"
+            for i, p in enumerate(pending[:10]):
+                created = p["created_at"][:10]
+                label = f"{labels[i]}. {p['description'][:15]}({created})"
+                qr_items.append(
+                    QuickReplyItem(
+                        action=PostbackAction(
+                            label=label[:20],
+                            data=f"action=group_select&idx={i}&group_id={group_id}",
+                            display_text=label[:20]
+                        )
+                    )
+                )
+            # 加一個「全部套用第一筆」快捷
+            qr_items.append(
+                QuickReplyItem(
+                    action=PostbackAction(
+                        label="⏭️ 套用最早一筆",
+                        data=f"action=group_select&idx=0&group_id={group_id}",
+                        display_text="套用最早一筆"
+                    )
+                )
+            )
+            full_text = ("\n\n".join(reply_lines) + "\n\n" if reply_lines else "") + choice_text
+            await line_bot_api.reply_message(ReplyMessageRequest(
+                reply_token=event.reply_token,
+                messages=[TextMessage(text=full_text, quick_reply=QuickReply(items=qr_items))]
+            ))
+
+
 async def ask_for_description(user_id, temp_data, line_bot_api, reply_token):
     Database.update_user_state(user_id, "GET_DESCRIPTION", temp_data)
     reply = f"好的，車號 {temp_data['car_number']} 已確認。\n\n2. 請輸入「問題描述」："
@@ -167,15 +285,83 @@ async def ask_for_car_number_again(user_id, line_bot_api, reply_token):
 async def handle_postback(event):
     user_id = event.source.user_id
     data = event.postback.data
-    
-    state_data = Database.get_user_state(user_id)
-    if not state_data: return
-    step = state_data["step"]
-    temp_data = state_data["temp_data"]
-    
+
     async with AsyncApiClient(configuration) as api_client:
         line_bot_api = AsyncMessagingApi(api_client)
-        
+
+        # ── 群組選擇回呼（不依賴 user state，改用 group_id 查詢） ──
+        if data.startswith("action=group_select"):
+            params = dict(kv.split("=", 1) for kv in data.split("&") if "=" in kv)
+            idx = int(params.get("idx", 0))
+            gid = params.get("group_id", "")
+
+            grp_state = Database.get_user_state(gid)
+            if not grp_state:
+                await line_bot_api.reply_message(ReplyMessageRequest(
+                    reply_token=event.reply_token,
+                    messages=[TextMessage(text="⚠️ 選擇逾時，請重新發送處理結果。")]
+                ))
+                return
+
+            payload    = grp_state["temp_data"]
+            choice     = payload["pending_choice"]
+            remaining  = payload.get("remaining", [])
+            done_lines = payload.get("done_lines", [])
+
+            chosen_report = choice["pending"][idx]
+            Database.update_report_solution(
+                report_id=chosen_report["id"],
+                solution=choice["solution"],
+                mileage=choice["mileage"],
+                handler_id=choice["sender_user_id"],
+                solution_type=choice["solution_type"]
+            )
+            car      = choice["car_number"]
+            sol      = choice["solution"]
+            sol_type = choice["solution_type"]
+            mileage  = choice["mileage"]
+            done_lines.append(
+                f"✅ {car}：已完成（{sol_type}）\n   方案：{sol}" + (f"\n   里程：{mileage} km" if mileage else "")
+            )
+
+            if remaining:
+                next_choice = remaining[0]
+                Database.update_user_state(gid, "GROUP_CHOOSE", {
+                    "pending_choice": next_choice,
+                    "remaining": remaining[1:],
+                    "done_lines": done_lines
+                })
+                next_pending = next_choice["pending"]
+                next_car = next_choice["car_number"]
+                choice_text = f"🔧 {next_car} 有 {len(next_pending)} 筆未完成項目，請選擇要更新哪一筆："
+                qr_items = []
+                for i, p in enumerate(next_pending[:10]):
+                    label = f"{'abcdefghij'[i]}. {p['description'][:15]}({p['created_at'][:10]})"
+                    qr_items.append(QuickReplyItem(action=PostbackAction(
+                        label=label[:20],
+                        data=f"action=group_select&idx={i}&group_id={gid}",
+                        display_text=label[:20]
+                    )))
+                full_text = ("\n\n".join(done_lines) + "\n\n" if done_lines else "") + choice_text
+                await line_bot_api.reply_message(ReplyMessageRequest(
+                    reply_token=event.reply_token,
+                    messages=[TextMessage(text=full_text, quick_reply=QuickReply(items=qr_items))]
+                ))
+            else:
+                Database.clear_user_state(gid)
+                await line_bot_api.reply_message(ReplyMessageRequest(
+                    reply_token=event.reply_token,
+                    messages=[TextMessage(text="\n\n".join(done_lines))]
+                ))
+            return
+
+        # ── 一般私訊 Postback（依賴 user state） ──
+        state_data = Database.get_user_state(user_id)
+        if not state_data:
+            return
+        step = state_data["step"]
+        temp_data = state_data["temp_data"]
+
         if data == "action=car_ok":
             await ask_for_description(user_id, temp_data, line_bot_api, event.reply_token)
         elif data == "action=car_retry":
@@ -187,7 +373,7 @@ async def handle_postback(event):
                 QuickReplyItem(action=PostbackAction(label="✅ 預覽並送出", data="action=confirm_preview", display_text="預覽並送出"))
             ])
             await line_bot_api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=reply, quick_reply=quick_reply)]))
-        
+
         elif data == "action=confirm_preview":
             Database.update_user_state(user_id, "CONFIRM", temp_data)
             media_count = len(temp_data.get("media_urls", []))
@@ -197,10 +383,10 @@ async def handle_postback(event):
                 QuickReplyItem(action=PostbackAction(label="❌ 取消重填", data="action=cancel", display_text="取消重填"))
             ])
             await line_bot_api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=summary_text, quick_reply=quick_reply)]))
-            
+
         elif data == "action=final_submit":
             await save_and_notify(user_id, temp_data, line_bot_api, event.reply_token)
-            
+
         elif data == "action=cancel":
             Database.clear_user_state(user_id)
             reply = "已取消。如需重新報修請再次傳送訊息。"
