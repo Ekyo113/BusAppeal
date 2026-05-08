@@ -25,6 +25,7 @@ import httpx
 from config import Config
 from database import Database
 from ai_service import AIService
+from notification_service import NotificationService
 import uuid
 import asyncio
 import json
@@ -195,18 +196,24 @@ async def handle_group_message(event, sender_user_id: str, group_id: str, text: 
 
             if len(pending) == 0:
                 # 規則7：無待處理項目 → 直接新建已完成通報
-                Database.create_completed_report_from_group(
+                new_report_res = Database.create_completed_report_from_group(
                     car_number=car_number, solution=solution, mileage=mileage,
                     handler_id=sender_user_id, solution_type=sol_type
                 )
+                if new_report_res.data:
+                    NotificationService.send_completion_notify(new_report_res.data[0]["id"])
+                
                 reply_lines.append(f"✅ {car_number}：已新增並完成（{sol_type}）\n   方案：{solution}" + (f"\n   里程：{mileage} km" if mileage else ""))
 
             elif len(pending) == 1:
                 # 只有一筆 → 直接更新
+                rid = pending[0]["id"]
                 Database.update_report_solution(
-                    report_id=pending[0]["id"], solution=solution, mileage=mileage,
+                    report_id=rid, solution=solution, mileage=mileage,
                     handler_id=sender_user_id, solution_type=sol_type
                 )
+                NotificationService.send_completion_notify(rid)
+                
                 reply_lines.append(f"✅ {car_number}：已完成（{sol_type}）\n   方案：{solution}" + (f"\n   里程：{mileage} km" if mileage else ""))
 
             else:
@@ -309,13 +316,15 @@ async def handle_postback(event):
             done_lines = payload.get("done_lines", [])
 
             chosen_report = choice["pending"][idx]
+            rid = chosen_report["id"]
             Database.update_report_solution(
-                report_id=chosen_report["id"],
+                report_id=rid,
                 solution=choice["solution"],
                 mileage=choice["mileage"],
                 handler_id=choice["sender_user_id"],
                 solution_type=choice["solution_type"]
             )
+            NotificationService.send_completion_notify(rid)
             car      = choice["car_number"]
             sol      = choice["solution"]
             sol_type = choice["solution_type"]

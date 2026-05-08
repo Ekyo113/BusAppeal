@@ -8,6 +8,7 @@ from linebot.v3.messaging import (
     PushMessageRequest,
     TextMessage
 )
+from notification_service import NotificationService
 from datetime import datetime, timedelta
 import pytz
 from fastapi.responses import StreamingResponse
@@ -72,30 +73,7 @@ async def update_solution(report_id: str, data: dict = Body(...), token: str = H
 @router.post("/reports/{report_id}/notify")
 async def notify_driver(report_id: str, token: str = Header(None)):
     verify_token(token)
-    
-    # Get report details
-    client = Database.get_client()
-    report = client.table("reports").select("*").eq("id", report_id).execute().data[0]
-    
-    driver_id = report["driver_line_user_id"]
-    car_number = report["car_number"]
-    
-    # Push message to driver
-    configuration = Configuration(access_token=Config.LINE_CHANNEL_ACCESS_TOKEN)
-    with ApiClient(configuration) as api_client:
-        line_bot_api = MessagingApi(api_client)
-        msg = f"🔧 維修進度通知\n\n您通報的車輛 {car_number} 已維修完成！\n感謝您的回報。"
-        line_bot_api.push_message(PushMessageRequest(to=driver_id, messages=[TextMessage(text=msg)]))
-        
-        # Also notify Admin Notify Group(s)
-        admin_msg = f"✅ 【維修完成】\n車號：{car_number}\n該單據已標記為已完成。"
-        notify_ids = [id.strip() for id in Config.LINE_NOTIFY_ID.split(",") if id.strip()]
-        for notify_id in notify_ids:
-            try:
-                line_bot_api.push_message(PushMessageRequest(to=notify_id, messages=[TextMessage(text=admin_msg)]))
-            except Exception as e:
-                print(f"Push completion to {notify_id} failed: {e}")
-    
+    NotificationService.send_completion_notify(report_id)
     return {"status": "sent"}
 
 @router.get("/export")

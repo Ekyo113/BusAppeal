@@ -166,30 +166,24 @@ class Database:
         return client.table("reports").insert(report).execute()
 
     @classmethod
-    def get_vendor_mappings(cls):
-        """獲取所有客運對應設定"""
+    def get_bus_vendors(cls):
+        """獲取所有公車與客運的對應清單"""
         client = cls.get_client()
         try:
-            res = client.table('vendor_mappings').select('*').execute()
+            res = client.table('monitored_bus').select('plate_number, vendor_name').execute()
             return res.data
         except Exception as e:
-            print(f"DB Error get_vendor_mappings: {e}")
+            print(f"DB Error get_bus_vendors: {e}")
             return []
 
     @classmethod
     def get_reports_for_export(cls, start_date: str, end_date: str, export_type: str):
         """
         獲取導出用的數據
-        start_date/end_date: YYYY-MM-DD
-        export_type: 'replacement' 或 'report'
         """
         client = cls.get_client()
         try:
-            # 獲取已完成的資料
             query = client.table('reports').select('*').eq('status', '已完成')
-            
-            # 日期過濾 (以 completed_at 為準)
-            # 注意：Supabase 會把日期轉為 UTC 存儲，這裡簡單使用字串比較
             query = query.gte('completed_at', f"{start_date}T00:00:00")
             query = query.lte('completed_at', f"{end_date}T23:59:59")
             
@@ -199,14 +193,14 @@ class Database:
             res = query.order('completed_at', desc=False).execute()
             reports = res.data
             
-            # 關聯客運公司
-            vendors = cls.get_vendor_mappings()
+            # 關聯客運公司 (使用 monitored_bus 表)
+            vendors = cls.get_bus_vendors()
             for r in reports:
                 r['vendor_name'] = '未知客運'
-                car = r.get('car_number', '') or ''
+                car = (r.get('car_number', '') or '').strip()
                 for v in vendors:
-                    pattern = v.get('pattern', '')
-                    if pattern and pattern in car:
+                    plate = (v.get('plate_number', '') or '').strip()
+                    if plate and plate == car: # 改用精確匹配或包含匹配
                         r['vendor_name'] = v.get('vendor_name', '未知客運')
                         break
             
