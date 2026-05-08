@@ -69,8 +69,9 @@
 
                 <!-- Reports Table List -->
                 <section class="reports-section">
-                    <div class="section-header">
+                    <div class="section-header" style="display: flex; justify-content: space-between; align-items: center;">
                         <h2>📋 通報清單 (條列式)</h2>
+                        <button onclick="openExportModal()" class="btn-secondary">📥 導出 PDF 報表</button>
                     </div>
                     <div class="table-container">
                         <table class="styled-table">
@@ -133,6 +134,38 @@
                     <textarea id="solution-input" placeholder="請輸入維修結果或處理方案..."></textarea>
                     <button onclick="saveSolution()" class="btn-primary">儲存方案與里程</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Export Modal -->
+    <div id="export-modal" class="hidden">
+        <div class="modal-overlay" onclick="closeExportModal()"></div>
+        <div class="modal-content" style="max-width: 450px;">
+            <button class="close-btn" onclick="closeExportModal()">&times;</button>
+            <h2 style="margin-bottom: 1.5rem;">📥 導出 PDF 報表</h2>
+            
+            <div class="detail-row">
+                <label>導出類型</label>
+                <select id="export-type" style="width:100%; padding: 0.8rem; border-radius: 8px; background: var(--surface-light); color: white; border: 1px solid var(--border);">
+                    <option value="replacement">換件紀錄 (預設 7 天)</option>
+                    <option value="report">通報紀錄 (預設 30 天)</option>
+                </select>
+            </div>
+
+            <div class="detail-row" style="display: flex; gap: 1rem;">
+                <div style="flex: 1;">
+                    <label>開始日期</label>
+                    <input type="date" id="export-start" style="width:100%; padding: 0.8rem; border-radius: 8px; background: var(--surface-light); color: white; border: 1px solid var(--border);">
+                </div>
+                <div style="flex: 1;">
+                    <label>結束日期</label>
+                    <input type="date" id="export-end" style="width:100%; padding: 0.8rem; border-radius: 8px; background: var(--surface-light); color: white; border: 1px solid var(--border);">
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button onclick="doExport()" class="btn-primary" style="width: 100%;">確認導出並下載</button>
             </div>
         </div>
     </div>

@@ -8,8 +8,10 @@ from linebot.v3.messaging import (
     PushMessageRequest,
     TextMessage
 )
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
+from fastapi.responses import StreamingResponse
+from export_service import ExportService
 
 router = APIRouter(prefix="/admin")
 
@@ -95,3 +97,29 @@ async def notify_driver(report_id: str, token: str = Header(None)):
                 print(f"Push completion to {notify_id} failed: {e}")
     
     return {"status": "sent"}
+
+@router.get("/export")
+async def export_pdf(type: str, start: str, end: str, token: str = Header(None)):
+    """
+    導出 PDF 報表
+    type: 'report' or 'replacement'
+    start/end: YYYY-MM-DD
+    """
+    verify_token(token)
+    
+    # 從資料庫抓取資料
+    reports = Database.get_reports_for_export(start, end, type)
+    
+    if not reports:
+        raise HTTPException(status_code=404, detail="該日期範圍內無已完成紀錄")
+    
+    # 產生 PDF
+    pdf_buffer = ExportService.generate_pdf(reports, type)
+    
+    filename = f"{'通報紀錄' if type == 'report' else '換件紀錄'}_{start}_to_{end}.pdf"
+    
+    return StreamingResponse(
+        pdf_buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )

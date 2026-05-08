@@ -456,3 +456,70 @@ function renderGPSChart(logs, dateStr) {
     gpsChart = new ApexCharts(document.querySelector("#gps-timeline-chart"), options);
     gpsChart.render();
 }
+
+// --- 導出報表功能 ---
+function openExportModal() {
+    const modal = document.getElementById('export-modal');
+    modal.classList.remove('hidden');
+    
+    const typeSelect = document.getElementById('export-type');
+    const startInput = document.getElementById('export-start');
+    const endInput = document.getElementById('export-end');
+
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    
+    // 監聽類型切換，自動調整日期範圍
+    typeSelect.onchange = () => {
+        const days = typeSelect.value === 'replacement' ? 7 : 30;
+        const startDate = new Date();
+        startDate.setDate(today.getDate() - days);
+        startInput.value = startDate.toISOString().split('T')[0];
+        endInput.value = todayStr;
+    };
+
+    // 初始預設值
+    typeSelect.onchange();
+}
+
+function closeExportModal() {
+    document.getElementById('export-modal').classList.add('hidden');
+}
+
+async function doExport() {
+    const type = document.getElementById('export-type').value;
+    const start = document.getElementById('export-start').value;
+    const end = document.getElementById('export-end').value;
+    const token = document.getElementById('admin-token').value;
+
+    if (!start || !end) {
+        showToast("請選擇日期範圍", "error");
+        return;
+    }
+
+    showToast("報表產生中，請稍候...", "success");
+
+    try {
+        const response = await fetch(`/admin/export?type=${type}&start=${start}&end=${end}`, {
+            headers: { 'token': token }
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || "導出失敗");
+        }
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${type === 'report' ? '通報紀錄' : '換件紀錄'}_${start}_${end}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        showToast("下載成功", "success");
+        closeExportModal();
+    } catch (error) {
+        showToast(error.message, "error");
+    }
+}
