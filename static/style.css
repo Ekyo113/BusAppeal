@@ -358,7 +358,7 @@ main {
 .table-actions .btn-danger:hover { background: #ef4444; color: white; }
 
 /* Modal */
-#modal {
+#modal, #export-modal {
     position: fixed;
     inset: 0;
     z-index: 10000;

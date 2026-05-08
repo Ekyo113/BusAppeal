@@ -114,12 +114,16 @@ async def export_pdf(type: str, start: str, end: str, token: str = Header(None))
         raise HTTPException(status_code=404, detail="該日期範圍內無已完成紀錄")
     
     # 產生 PDF
+    # 產生 PDF
     pdf_buffer = ExportService.generate_pdf(reports, type)
-    
     filename = f"{'通報紀錄' if type == 'report' else '換件紀錄'}_{start}_to_{end}.pdf"
+    
+    # 處理中文字元檔名編碼
+    from urllib.parse import quote
+    encoded_filename = quote(filename)
     
     return StreamingResponse(
         pdf_buffer,
         media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"}
     )
