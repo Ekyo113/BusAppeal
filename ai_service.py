@@ -76,6 +76,11 @@ class AIService:
 
             # 里程二次清理：處理萬為單位，再移除所有非數字
             for item in result:
+                # 車號：若純數字則補 "EAL-" 前綴
+                car = str(item.get('car_number', '')).strip()
+                if car and re.fullmatch(r'\d+', car):
+                    item['car_number'] = f'EAL-{car}'
+
                 m = str(item.get('mileage', ''))
                 # 處理「1.2萬」→12000
                 wan = re.search(r'(\d+\.?\d*)\s*萬', m)
