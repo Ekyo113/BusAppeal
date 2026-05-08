@@ -170,7 +170,7 @@ class Database:
         """獲取所有公車與客運的對應清單"""
         client = cls.get_client()
         try:
-            res = client.table('monitored_bus').select('plate_number, vendor_name').execute()
+            res = client.table('monitored_buses').select('plate_number, vendor_name').execute()
             return res.data
         except Exception as e:
             print(f"DB Error get_bus_vendors: {e}")
@@ -193,7 +193,7 @@ class Database:
             res = query.order('completed_at', desc=False).execute()
             reports = res.data
             
-            # 關聯客運公司 (使用 monitored_bus 表)
+            # 關聯客運公司 (使用 monitored_buses 表)
             vendors = cls.get_bus_vendors()
             for r in reports:
                 r['vendor_name'] = '未知客運'
