@@ -13,8 +13,16 @@ class AIService:
             print(f"AI Service Diagnostic: Key starts with {key[:5]}... and ends with ...{key[-5:]}")
         
         genai.configure(api_key=key)
-        # Switching to gemini-1.5-flash for better performance and format support
-        self.model = genai.GenerativeModel('gemini-1.5-flash')
+        # 使用更明確的模型名稱並增加診斷資訊
+        self.model = genai.GenerativeModel('gemini-1.5-flash-latest')
+        
+        try:
+            # 異步環境下同步呼叫 list_models 僅用於啟動時診斷
+            for m in genai.list_models():
+                if 'generateContent' in m.supported_generation_methods:
+                    print(f"AI Service Diagnostic: Found supported model: {m.name}")
+        except Exception as e:
+            print(f"AI Service Diagnostic: Could not list models: {e}")
 
     async def parse_group_message(self, text: str):
         """
