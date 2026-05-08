@@ -186,15 +186,17 @@ main {
     .dashboard-grid {
         flex-direction: row;
         align-items: flex-start;
+        gap: 1.5rem;
     }
     .stats-panel {
-        width: 240px;
+        width: 160px; /* Shrunk from 240px */
         flex-shrink: 0;
         position: sticky;
         top: 2rem;
     }
     .reports-section {
         flex-grow: 1;
+        min-width: 0; /* Allow section to shrink correctly */
     }
 }
 
@@ -215,7 +217,7 @@ main {
 .stat-card {
     flex: 1;
     background: var(--surface);
-    padding: 1.25rem;
+    padding: 0.75rem 1rem; /* Shrunk from 1.25rem */
     border-radius: 12px;
     border: 1px solid var(--border);
     display: flex;
@@ -224,8 +226,8 @@ main {
 }
 
 .stat-card:hover { transform: translateY(-2px); border-color: var(--primary); }
-.stat-card .label { color: var(--text-muted); font-size: 0.8rem; margin-bottom: 0.25rem; text-transform: uppercase; }
-.stat-card .value { font-size: 1.75rem; font-weight: 700; color: white; font-family: 'Outfit'; }
+.stat-card .label { color: var(--text-muted); font-size: 0.75rem; margin-bottom: 0.15rem; text-transform: uppercase; }
+.stat-card .value { font-size: 1.5rem; font-weight: 700; color: white; font-family: 'Outfit'; }
 
 .stat-card[data-status="pending"] { border-left: 4px solid var(--pending); }
 .stat-card[data-status="progress"] { border-left: 4px solid var(--progress); }
@@ -243,9 +245,9 @@ main {
 .styled-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.9rem;
+    font-size: 0.85rem; /* Slightly smaller font to fit more */
     text-align: left;
-    table-layout: fixed; /* Strict layout */
+    table-layout: auto; /* Changed from fixed to allow columns to fit content */
 }
 
 .styled-table thead tr {
@@ -275,20 +277,41 @@ main {
 
 .styled-table th,
 .styled-table td {
-    padding: 1rem 1.25rem;
+    padding: 0.85rem 1rem;
     border-bottom: 1px solid var(--border);
     white-space: nowrap;
+    vertical-align: middle;
 }
 
-.cell-desc, .cell-sol {
-    max-width: 200px; /* Reduced to fit more columns */
+.cell-car {
+    font-weight: 600;
+    color: var(--primary);
+    min-width: 90px;
+}
+
+.cell-desc {
+    max-width: 250px;
+    min-width: 150px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     color: var(--text);
 }
 
-.cell-time { color: var(--text-muted); font-size: 0.85rem; }
+.cell-sol {
+    max-width: 250px;
+    min-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-muted);
+}
+
+.cell-time { 
+    color: var(--text-muted); 
+    font-size: 0.75rem;
+    white-space: nowrap;
+}
 
 /* Solution Type Label */
 .sol-type-label {
