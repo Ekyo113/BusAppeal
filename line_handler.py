@@ -471,11 +471,10 @@ async def save_and_notify(user_id, temp_data, line_bot_api, reply_token):
     print(f"DEBUG Routing: Car {car_number} matched vendor groups: {vendor_ids}")
 
     # 2. Get default Admin/Receiver IDs from config
-    notify_ids = [id.strip() for id in Config.LINE_NOTIFY_ID.split(",") if id.strip()]
-    receive_ids = [id.strip() for id in Config.LINE_RECEIVE_ID.split(",") if id.strip()]
+    receive_ids = [id.strip() for id in (Config.LINE_RECEIVE_ID or "").split(",") if id.strip()]
     
     # 3. Merge all targets (Set to ensure uniqueness)
-    all_targets = list(set(notify_ids + receive_ids + vendor_ids))
+    all_targets = list(set(receive_ids + vendor_ids))
     print(f"DEBUG Routing: Final push target IDs: {all_targets}")
 
     for target_id in all_targets:

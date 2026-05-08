@@ -40,22 +40,5 @@ class NotificationService:
                         ))
                     except Exception as e:
                         print(f"Notify Driver {driver_line_id} failed: {e}")
-
-                # 2. 通知管理群 (LINE_NOTIFY_ID)
-                admin_msg = f"✅ 【維修完成】\n車號：{car_number}\n該單據已標記為已完成。"
-                notify_ids = [id.strip() for id in Config.LINE_NOTIFY_ID.split(",") if id.strip()]
-                for notify_id in notify_ids:
-                    # 簡單檢查 ID 格式 (Messaging API 必須以 U, C, R 開頭)
-                    if not any(notify_id.startswith(p) for p in ['U', 'C', 'R']):
-                        print(f"NotificationService: Skip invalid notify_id: {notify_id}")
-                        continue
-                        
-                    try:
-                        line_bot_api.push_message(PushMessageRequest(
-                            to=notify_id, 
-                            messages=[TextMessage(text=admin_msg)]
-                        ))
-                    except Exception as e:
-                        print(f"Notify Admin Group {notify_id} failed: {e}")
         except Exception as e:
             print(f"NotificationService Error: {e}")
