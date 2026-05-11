@@ -16,4 +16,4 @@ def test_a2(city_code):
         print("First record StopName:", data[0].get("StopName"))
         print("First record PlateNumb:", data[0].get("PlateNumb"))
 
-test_a2("Tainan")
+test_a2("Kaohsiung")

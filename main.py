@@ -27,8 +27,8 @@ def collect_weekly_bus_data():
     if (5 * 60 + 30) <= minutes <= (23 * 60):
         try:
             from database import Database
-            # Only record Tainan
-            data = bus_service.fetch_bus_status("Tainan", force_a2=False)
+            # Only record Kaohsiung
+            data = bus_service.fetch_bus_status("Kaohsiung", force_a2=False)
             buses = data.get("buses", [])
             
             records = []
@@ -45,7 +45,7 @@ def collect_weekly_bus_data():
             if records:
                 client = Database.get_client()
                 client.table("weekly_bus_gps_log").insert(records).execute()
-                print(f"[WeeklyBusData] Inserted {len(records)} Tainan bus GPS records.")
+                print(f"[WeeklyBusData] Inserted {len(records)} Kaohsiung bus GPS records.")
 
         except Exception as e:
             import traceback
@@ -129,10 +129,10 @@ async def get_cities(x_map_password: str = Header(None)):
 
 
 @app.get("/bus/status")
-async def get_bus_status(city: str = "Tainan", force_a2: bool = False, x_map_password: str = Header(None)):
+async def get_bus_status(city: str = "Kaohsiung", force_a2: bool = False, x_map_password: str = Header(None)):
     """
     取得指定城市所有受監控公車的整合狀態。
-    Query param: ?city=Tainan | Kaohsiung | ... & force_a2=true
+    Query param: ?city=Kaohsiung | Tainan | ... & force_a2=true
     """
     if Config.MAP_PASSWORD and x_map_password != Config.MAP_PASSWORD:
         raise HTTPException(status_code=401, detail="Unauthorized")

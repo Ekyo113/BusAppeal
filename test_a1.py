@@ -1,6 +1,6 @@
 import asyncio
 from bus_service import _fetch_tdx_realtime
-data = _fetch_tdx_realtime('Tainan')
+data = _fetch_tdx_realtime('Kaohsiung')
 if data:
     print(data[0].keys())
     if 'StopName' in data[0]:
