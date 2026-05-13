@@ -154,8 +154,8 @@ async def analyze_all_logs(token: str = Header(None)):
         date = row["recorded_at"].split("T")[0]
         plate = row["plate_number"]
         
-        # [測試模式] 目前僅分析 EAA-778
-        if plate != "EAA-778":
+        # [測試模式] 目前僅分析 EAA-779
+        if plate != "EAA-779":
             continue
             
         pair = (plate, date)
