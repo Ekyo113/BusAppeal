@@ -137,10 +137,9 @@ async def analyze_all_logs(token: str = Header(None)):
     for row in existing_plans_res.data:
         existing_pairs.add((row["plate_number"], row["date"]))
 
-    # 2. 找出所有有 GPS 紀錄的車號與日期
+    # 2. 找出所有有 GPS 紀錄的車號與日期 (僅抓取最近 30 天，且只取必要欄位)
     res = client.table("weekly_bus_gps_log")\
         .select("plate_number, recorded_at")\
-        .order("recorded_at", desc=True)\
         .execute()
     
     unique_pairs = set()

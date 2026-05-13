@@ -2,6 +2,7 @@ import google.generativeai as genai
 from config import Config
 import json
 import re
+from utils import haversine_meters
 
 class AIService:
     def __init__(self):
@@ -153,8 +154,6 @@ class AIService:
         gps_summary = []
         total_dist_km = 0
         
-        from bus_service import _haversine_meters
-        
         for i in range(len(gps_data)):
             curr = gps_data[i]
             gps_summary.append({
@@ -166,7 +165,7 @@ class AIService:
             
             if i > 0:
                 prev = gps_data[i-1]
-                dist = _haversine_meters(prev["lat"], prev["lon"], curr["lat"], curr["lon"])
+                dist = haversine_meters(prev["lat"], prev["lon"], curr["lat"], curr["lon"])
                 total_dist_km += dist / 1000.0
 
         prompt = f"""你是公車營運分析專家。請根據給定的 GPS 紀錄與班次時刻表，推估車號 {plate_number} 在 {date} 的營運方案。
