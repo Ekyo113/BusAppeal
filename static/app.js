@@ -607,19 +607,27 @@ async function syncSchedules() {
     const token = document.getElementById('admin-token').value;
     showToast("正在從 TDX 同步台南與高雄時刻表...");
     try {
-        // 同步高雄
+        console.log("Starting sync for Kaohsiung...");
         const resK = await fetch('/admin/bus_plans/sync_schedules?city=Kaohsiung', {
             method: 'POST', headers: { 'token': token }
-        }).then(r => r.json());
+        }).then(async r => {
+            if (!r.ok) throw new Error(`Kaohsiung sync failed: ${r.status}`);
+            return r.json();
+        });
         
-        // 同步台南
+        console.log("Starting sync for Tainan...");
         const resT = await fetch('/admin/bus_plans/sync_schedules?city=Tainan', {
             method: 'POST', headers: { 'token': token }
-        }).then(r => r.json());
+        }).then(async r => {
+            if (!r.ok) throw new Error(`Tainan sync failed: ${r.status}`);
+            return r.json();
+        });
         
         showToast(`同步完成！高雄: ${resK.count} 筆, 台南: ${resT.count} 筆`);
+        console.log("Sync results:", { resK, resT });
     } catch (error) {
-        showToast("同步失敗", "error");
+        console.error("Sync Error:", error);
+        showToast(`同步失敗: ${error.message}`, "error");
     }
 }
 
@@ -629,14 +637,23 @@ async function analyzeAllLogs() {
 
     showToast("AI 分析中，請勿關閉視窗...", "success");
     try {
+        console.log("Starting batch analysis...");
         const response = await fetch('/admin/bus_plans/analyze_all', {
             method: 'POST',
             headers: { 'token': token }
         });
+        
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.detail || `Analysis failed: ${response.status}`);
+        }
+        
         const res = await response.json();
-        showToast(`分析完成！共產生 ${res.analyzed_count} 筆方案`);
+        console.log("Analysis results:", res);
+        showToast(res.message || `分析完成！共產生 ${res.analyzed_count} 筆方案`);
         loadPlans();
     } catch (error) {
-        showToast("分析過程發生錯誤", "error");
+        console.error("Analysis Error:", error);
+        showToast(`分析過程發生錯誤: ${error.message}`, "error");
     }
 }

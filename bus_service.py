@@ -17,6 +17,22 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional
 from database import Database
 from config import Config
+
+# ─────────────────────────────────────────
+# Haversine 距離計算 (移至上方避免循環引用)
+# ─────────────────────────────────────────
+
+def _haversine_meters(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """計算兩個 GPS 座標之間的距離（公尺）。"""
+    if lat1 is None or lon1 is None or lat2 is None or lon2 is None:
+        return 0
+    R = 6_371_000  # 地球半徑（公尺）
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
 from ai_service import AIService
 
 
@@ -65,12 +81,6 @@ def _get_tdx_token() -> str:
 # Haversine 距離計算
 # ─────────────────────────────────────────
 
-def _haversine_meters(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """計算兩個 GPS 座標之間的距離（公尺）。"""
-    R = 6_371_000  # 地球半徑（公尺）
-    phi1, phi2 = math.radians(lat1), math.radians(lat2)
-    dphi = math.radians(lat2 - lat1)
-    dlambda = math.radians(lon2 - lon1)
     a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
@@ -407,11 +417,14 @@ def _fetch_tdx_schedules(city_code: str) -> list[dict]:
 
 def sync_route_schedules(city_code: str):
     """將 TDX 時刻表同步至資料庫快取。"""
+    print(f"[BusService] Syncing schedules for {city_code}...")
     schedules = _fetch_tdx_schedules(city_code)
     if not schedules:
+        print(f"[BusService] No schedules found for {city_code}")
         return 0
 
     records = []
+    # ... (原有邏輯不變，僅增加日誌)
     for route in schedules:
         route_name = route.get("RouteName", {}).get("Zh_tw", "")
         direction = route.get("Direction", 0)
@@ -443,6 +456,7 @@ def sync_route_schedules(city_code: str):
 
 async def generate_bus_plan(plate_number: str, date: str):
     """分析特定車號與日期的營運方案。"""
+    print(f"[BusService] Generating plan for {plate_number} on {date}...")
     client = Database.get_client()
     
     # 1. 抓取 GPS 紀錄
