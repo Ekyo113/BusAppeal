@@ -117,8 +117,14 @@ async def get_bus_plans(plate_number: str = None, date: str = None, token: str =
     if date:
         query = query.eq("date", date)
     
-    response = query.order("date", desc=True).execute()
-    return response.data
+    res = query.order("date", desc=True).execute()
+    return res.data
+
+@router.get("/bus_plates")
+async def get_bus_plates(token: str = Header(None)):
+    verify_token(token)
+    plates = bus_service.fetch_unique_plates()
+    return {"plates": plates}
 
 @router.post("/bus_plans/sync_schedules")
 async def sync_schedules(city: str = "Kaohsiung", token: str = Header(None)):

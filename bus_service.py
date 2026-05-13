@@ -506,7 +506,7 @@ async def generate_bus_plan(plate_number: str, date: str):
     end_time = f"{date}T23:59:59"
     
     gps_res = client.table("weekly_bus_gps_log")\
-        .select("route_name, latitude, longitude, recorded_at")\
+        .select("route_name, lat, lon, recorded_at")\
         .eq("plate_number", plate_number)\
         .gte("recorded_at", start_time)\
         .lte("recorded_at", end_time)\
@@ -568,6 +568,13 @@ async def generate_bus_plan(plate_number: str, date: str):
     client.table("bus_operating_plans").upsert(plan_data, on_conflict="plate_number, date").execute()
     
     return plan_data
+
+def fetch_unique_plates():
+    """獲取資料庫中現有的唯一車號。"""
+    client = Database.get_client()
+    res = client.table("weekly_bus_gps_log").select("plate_number").execute()
+    plates = sorted(list(set(r["plate_number"] for r in res.data)))
+    return plates
 
 
 def fetch_cities() -> list[dict]:

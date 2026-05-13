@@ -345,6 +345,7 @@ function switchTab(tabId) {
         }
         loadGPSLog();
     } else if (tabId === 'tab-plans') {
+        loadPlates();
         loadPlans();
     }
 }
@@ -528,9 +529,31 @@ async function doExport() {
 
 // --- Operating Plans Logic ---
 
+async function loadPlates() {
+    const token = document.getElementById('admin-token').value;
+    const select = document.getElementById('plan-plate-filter');
+    const currentVal = select.value;
+
+    try {
+        const response = await fetch('/admin/bus_plates', { headers: { 'token': token } });
+        const { plates } = await response.json();
+        
+        select.innerHTML = '<option value="">選擇車號...</option>';
+        plates.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p;
+            opt.innerText = p;
+            if (p === currentVal) opt.selected = true;
+            select.appendChild(opt);
+        });
+    } catch (error) {
+        console.error("Failed to load plates", error);
+    }
+}
+
 async function loadPlans() {
     const token = document.getElementById('admin-token').value;
-    const plate = document.getElementById('plan-plate-filter').value.trim();
+    const plate = document.getElementById('plan-plate-filter').value;
     const date = document.getElementById('plan-date-filter').value;
     const container = document.getElementById('plans-container');
 
