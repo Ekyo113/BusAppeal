@@ -151,7 +151,13 @@ async def analyze_all_logs(token: str = Header(None)):
     unique_pairs = set()
     for row in res.data:
         date = row["recorded_at"].split("T")[0]
-        pair = (row["plate_number"], date)
+        plate = row["plate_number"]
+        
+        # [測試模式] 目前僅分析 EAA-778
+        if plate != "EAA-778":
+            continue
+            
+        pair = (plate, date)
         if pair not in existing_pairs:
             unique_pairs.add(pair)
     

@@ -156,8 +156,10 @@ class AIService:
         
         for i in range(len(gps_data)):
             curr = gps_data[i]
+            # 使用台灣時間 (UTC+8) 進行分析
+            time_tw = curr.get("recorded_at_tw", curr["recorded_at"])
             gps_summary.append({
-                "t": curr["recorded_at"].split("T")[1][:5],
+                "t": time_tw.split("T")[1][:5],
                 "r": curr["route_name"],
                 "lat": curr["lat"],
                 "lon": curr["lon"]

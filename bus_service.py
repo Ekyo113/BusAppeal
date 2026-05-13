@@ -513,7 +513,17 @@ async def generate_bus_plan(plate_number: str, date: str):
         .order("recorded_at")\
         .execute()
     
-    gps_data = gps_res.data
+    gps_data = []
+    for row in gps_res.data:
+        # 將 UTC 時間轉換為台灣時間 (UTC+8)
+        try:
+            utc_dt = datetime.fromisoformat(row["recorded_at"].replace("Z", "+00:00"))
+            tw_dt = utc_dt + timedelta(hours=8)
+            row["recorded_at_tw"] = tw_dt.isoformat()
+            gps_data.append(row)
+        except:
+            gps_data.append(row)
+            
     if not gps_data:
         print(f"[BusService] No GPS logs found for {plate_number} on {date}")
         return None
