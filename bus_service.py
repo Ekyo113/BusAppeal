@@ -401,6 +401,50 @@ def _fetch_tdx_schedules(city_code: str) -> list[dict]:
         print(f"[BusService Schedule] TDX fetch failed ({city_code}): {e}")
         return []
 
+def sync_specific_route_schedules(city_code: str, route_name: str):
+    """抓取單一特定路線的時刻表並存入快取。"""
+    print(f"[BusService] Syncing specific route: {route_name} in {city_code}...")
+    token = _get_tdx_token()
+    url = f"{TDX_BASE_URL}/v2/Bus/Schedule/City/{city_code}/{route_name}"
+    params = {"$format": "JSON"}
+    headers = {"Authorization": f"Bearer {token}"}
+
+    try:
+        resp = httpx.get(url, params=params, headers=headers, timeout=20)
+        if resp.status_code == 404:
+            print(f"[BusService] Route {route_name} not found in TDX.")
+            return 0
+        resp.raise_for_status()
+        schedules = resp.json()
+    except Exception as e:
+        print(f"[BusService] Failed to fetch {route_name}: {e}")
+        return 0
+
+    records = []
+    for route in schedules:
+        direction = route.get("Direction", 0)
+        timetables = route.get("Timetables", [])
+        for entry in timetables:
+            stop_times = entry.get("StopTimes", [])
+            if stop_times:
+                dept_time = stop_times[0].get("DepartureTime", "")
+                if dept_time:
+                    records.append({
+                        "city_code": city_code,
+                        "route_name": route_name,
+                        "direction": direction,
+                        "departure_time": dept_time
+                    })
+
+    if records:
+        client = Database.get_client()
+        # 刪除該路線舊資料
+        client.table("bus_route_schedules").delete().eq("city_code", city_code).eq("route_name", route_name).execute()
+        client.table("bus_route_schedules").insert(records).execute()
+        print(f"[BusService] Saved {len(records)} schedule entries for {route_name}")
+    
+    return len(records)
+
 def sync_route_schedules(city_code: str):
     """將 TDX 時刻表同步至資料庫快取。"""
     print(f"[BusService] Syncing schedules for {city_code}...")
@@ -462,7 +506,7 @@ async def generate_bus_plan(plate_number: str, date: str):
     end_time = f"{date}T23:59:59"
     
     gps_res = client.table("weekly_bus_gps_log")\
-        .select("route_name, lat, lon, recorded_at")\
+        .select("route_name, latitude, longitude, recorded_at")\
         .eq("plate_number", plate_number)\
         .gte("recorded_at", start_time)\
         .lte("recorded_at", end_time)\
@@ -471,22 +515,40 @@ async def generate_bus_plan(plate_number: str, date: str):
     
     gps_data = gps_res.data
     if not gps_data:
+        print(f"[BusService] No GPS logs found for {plate_number} on {date}")
         return None
 
-    # 2. 抓取快取的時刻表
-    # 先從 GPS 資料中萃取出當天跑過的路線，縮小搜尋範圍
-    routes = list(set([r["route_name"] for r in gps_data if r.get("route_name")]))
-    
+    # 2. 識別當天出現過的路線，並確保快取中有資料
+    routes = sorted(list(set([r["route_name"] for r in gps_data if r.get("route_name")])))
+    city_code = "Kaohsiung" if plate_number.startswith("EAL") else "Tainan"
+
+    for route in routes:
+        # 檢查快取
+        cache_check = client.table("bus_route_schedules")\
+            .select("id")\
+            .eq("city_code", city_code)\
+            .eq("route_name", route)\
+            .limit(1)\
+            .execute()
+        
+        if not cache_check.data:
+            print(f"[BusService] Cache miss for {route}, syncing now...")
+            sync_specific_route_schedules(city_code, route)
+
+    # 3. 抓取快取的時刻表 (僅限相關路線)
     schedule_res = client.table("bus_route_schedules")\
         .select("route_name, departure_time")\
+        .eq("city_code", city_code)\
         .in_("route_name", routes)\
         .execute()
     
     schedules = schedule_res.data
-
-    # 3. 呼叫 AI 分析
-    ai = AIService()
-    analysis = await ai.analyze_bus_operating_plan(plate_number, date, gps_data, schedules)
+    
+    # 4. 呼叫 AI 進行分析
+    ai_service = AIService()
+    analysis = await ai_service.analyze_bus_operating_plan(
+        plate_number, date, gps_data, schedules
+    )
 
     # 4. 判斷方案名稱 (根據歷史紀錄)
     # 這裡簡化處理：如果內容與現有方案相似則沿用名稱，否則遞增。
