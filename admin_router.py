@@ -171,7 +171,7 @@ async def analyze_all_logs(token: str = Header(None)):
         if plan:
             results.append(plan)
             
-        # 配額保護：每 20 秒呼叫一次 (4 RPM 限制)
-        await asyncio.sleep(20)
+        # 配額保護：每 15 秒呼叫一次 (避免頻繁觸發 429)
+        await asyncio.sleep(15)
             
     return {"status": "success", "analyzed_count": len(results)}

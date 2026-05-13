@@ -14,9 +14,9 @@ class AIService:
             print(f"AI Service Diagnostic: Key starts with {key[:5]}... and ends with ...{key[-5:]}")
         
         genai.configure(api_key=key)
-        # 改用效能更強的 gemini-2.5-flash
+        # 改用 gemini-3.1-flash-lite
         self.model = genai.GenerativeModel(
-            model_name='gemini-2.5-flash',
+            model_name='gemini-3.1-flash-lite',
             safety_settings=[
                 {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
                 {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
@@ -158,6 +158,16 @@ class AIService:
         gps_data: list of {route_name, lat, lon, recorded_at}
         schedules: list of {route_name, departure_time}
         """
+        if len(gps_data) < 10:
+            print(f"AI Plan: GPS logs too few ({len(gps_data)}), skipping analysis.")
+            return {
+                "plan_name": "資料不足",
+                "route_summary": "紀錄筆數少於 10 筆，無法分析",
+                "total_mileage": 0,
+                "route_details": [],
+                "break_details": []
+            }
+
         # 整理 GPS 資料摘要，減少 token 使用
         gps_summary = []
         total_dist_km = 0
