@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Header, HTTPException, Body
+import asyncio
 from database import Database
 from config import Config
 from linebot.v3.messaging import (
@@ -169,5 +170,8 @@ async def analyze_all_logs(token: str = Header(None)):
         plan = await bus_service.generate_bus_plan(plate, date)
         if plan:
             results.append(plan)
+            
+        # 配額保護：每 20 秒呼叫一次 (4 RPM 限制)
+        await asyncio.sleep(20)
             
     return {"status": "success", "analyzed_count": len(results)}

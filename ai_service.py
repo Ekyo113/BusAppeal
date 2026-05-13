@@ -14,8 +14,8 @@ class AIService:
             print(f"AI Service Diagnostic: Key starts with {key[:5]}... and ends with ...{key[-5:]}")
         
         genai.configure(api_key=key)
-        # 2.0 額度可能受限，改用最穩定的 gemini-flash-latest
-        self.model = genai.GenerativeModel('gemini-flash-latest')
+        # 配合配額限制，改用 gemini-2.5-flash-lite
+        self.model = genai.GenerativeModel('gemini-2.5-flash-lite')
         
         try:
             # 異步環境下同步呼叫 list_models 僅用於啟動時診斷
