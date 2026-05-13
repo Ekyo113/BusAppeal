@@ -14,10 +14,9 @@ class AIService:
             print(f"AI Service Diagnostic: Key starts with {key[:5]}... and ends with ...{key[-5:]}")
         
         genai.configure(api_key=key)
-        genai.configure(api_key=key)
-        # 使用最穩定的 1.5 Flash 版本
+        # 改用環境支援的 gemini-2.5-flash-lite
         self.model = genai.GenerativeModel(
-            model_name='gemini-1.5-flash',
+            model_name='gemini-2.5-flash-lite',
             safety_settings=[
                 {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
                 {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
