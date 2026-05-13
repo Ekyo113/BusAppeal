@@ -133,6 +133,39 @@ async def sync_schedules(city: str = "Kaohsiung", token: str = Header(None)):
     count = bus_service.sync_route_schedules(city)
     return {"status": "success", "count": count}
 
+@router.post("/bus_plans/analyze_selected")
+async def analyze_selected_vehicle(plate_number: str = Body(..., embed=True), token: str = Header(None)):
+    verify_token(token)
+    client = Database.get_client()
+    
+    # 1. 找出該車號的所有日期
+    res = client.table("weekly_bus_gps_log")\
+        .select("recorded_at")\
+        .eq("plate_number", plate_number)\
+        .execute()
+    
+    unique_dates = sorted(list(set(row["recorded_at"].split("T")[0] for row in res.data)), reverse=True)
+    
+    results = []
+    for date in unique_dates:
+        # 檢查是否已分析過
+        existing = client.table("bus_operating_plans")\
+            .select("id")\
+            .eq("plate_number", plate_number)\
+            .eq("date", date)\
+            .limit(1)\
+            .execute()
+        
+        if existing.data:
+            continue
+            
+        plan = await bus_service.generate_bus_plan(plate_number, date)
+        if plan:
+            results.append(plan)
+            await asyncio.sleep(15)
+            
+    return {"status": "success", "analyzed_count": len(results)}
+
 @router.post("/bus_plans/analyze_all")
 async def analyze_all_logs(token: str = Header(None)):
     verify_token(token)

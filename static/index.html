@@ -131,8 +131,9 @@
                         <select id="plan-plate-filter" style="background: var(--surface-light); border: 1px solid var(--border); color: white; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.9rem; min-width: 150px;">
                             <option value="">選擇車號...</option>
                         </select>
-                        <input type="date" id="plan-date-filter" placeholder="選擇日期 (選填)">
-                        <button class="btn-primary" onclick="loadPlans()">查詢方案</button>
+                        <input type="date" id="plan-date-filter">
+                        <button class="btn-primary" onclick="loadPlans()">🔍 查詢方案</button>
+                        <button class="btn-secondary" onclick="analyzeSelectedVehicle()" id="btn-analyze-selected">🧠 分析此車紀錄</button>
                     </div>
 
                     <div id="plans-container" class="plans-list">

@@ -551,6 +551,116 @@ async function loadPlates() {
     }
 }
 
+async function analyzeSelectedVehicle() {
+    const token = document.getElementById('admin-token').value;
+    const plate = document.getElementById('plan-plate-filter').value;
+    const btn = document.getElementById('btn-analyze-selected');
+
+    if (!plate) {
+        showToast("請先選擇車號", "warning");
+        return;
+    }
+
+    if (!confirm(`確定要分析 ${plate} 的所有紀錄嗎？\n這可能需要幾分鐘時間。`)) return;
+
+    btn.disabled = true;
+    btn.innerText = "⏳ 分析中...";
+    showToast(`正在開始分析 ${plate}...`, "info");
+
+    try {
+        const response = await fetch('/admin/bus_plans/analyze_selected', {
+            method: 'POST',
+            headers: { 'token': token, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ plate_number: plate })
+        });
+        const result = await response.json();
+        showToast(`分析完成！新增 ${result.analyzed_count} 筆紀錄`, "success");
+        loadPlans();
+    } catch (error) {
+        showToast("分析失敗", "error");
+    } finally {
+        btn.disabled = false;
+        btn.innerText = "🧠 分析此車紀錄";
+    }
+}
+
+function renderPlans(plans) {
+    const container = document.getElementById('plans-container');
+    if (!plans || plans.length === 0) {
+        container.innerHTML = `<div class="empty-state">尚未分析完成。請點擊「分析此車紀錄」或調整查詢條件。</div>`;
+        return;
+    }
+
+    let html = `
+        <div class="table-container">
+            <table class="plans-table">
+                <thead>
+                    <tr>
+                        <th>日期</th>
+                        <th>車號</th>
+                        <th>方案名稱</th>
+                        <th>路線摘要</th>
+                        <th>總里程</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+
+    plans.forEach((plan, index) => {
+        html += `
+            <tr>
+                <td>${plan.date}</td>
+                <td><span class="badge-plate">${plan.plate_number}</span></td>
+                <td>${plan.plan_name}</td>
+                <td class="text-truncate" title="${plan.route_summary}">${plan.route_summary || '-'}</td>
+                <td><strong>${plan.total_mileage}</strong> km</td>
+                <td>
+                    <button class="btn-small" onclick="toggleDetails(${index})">詳情</button>
+                </td>
+            </tr>
+            <tr id="details-${index}" class="detail-row hidden">
+                <td colspan="6">
+                    <div class="plan-details-content">
+                        <div class="details-grid">
+                            <div class="details-section">
+                                <h4>🚌 路線行程</h4>
+                                <div class="timeline">
+                                    ${(plan.route_details || []).map(r => `
+                                        <div class="timeline-item">
+                                            <span class="time">${r.start_time} - ${r.end_time}</span>
+                                            <span class="desc">${r.route}</span>
+                                        </div>
+                                    `).join('') || '無資料'}
+                                </div>
+                            </div>
+                            <div class="details-section">
+                                <h4>⏸️ 中退紀錄</h4>
+                                <div class="timeline timeline-break">
+                                    ${(plan.break_details || []).map(b => `
+                                        <div class="timeline-item">
+                                            <span class="time">${b.start_time} - ${b.end_time}</span>
+                                            <span class="desc">${b.location}</span>
+                                        </div>
+                                    `).join('') || '無資料'}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        `;
+    });
+
+    html += `</tbody></table></div>`;
+    container.innerHTML = html;
+}
+
+function toggleDetails(index) {
+    const row = document.getElementById(`details-${index}`);
+    row.classList.toggle('hidden');
+}
+
 async function loadPlans() {
     const token = document.getElementById('admin-token').value;
     const plate = document.getElementById('plan-plate-filter').value;

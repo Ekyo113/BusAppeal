@@ -686,6 +686,151 @@ main {
     font-weight: 600;
 }
 
+/* Operating Plans Table Styling */
+.table-container {
+    background: var(--surface);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+    margin-top: 1rem;
+}
+
+.plans-table {
+    width: 100%;
+    border-collapse: collapse;
+    color: var(--text-secondary);
+}
+
+.plans-table th {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 1rem;
+    text-align: left;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05rem;
+    color: var(--text-dim);
+    border-bottom: 1px solid var(--border);
+}
+
+.plans-table td {
+    padding: 1rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.9rem;
+}
+
+.plans-table tr:hover {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.badge-plate {
+    background: var(--primary);
+    color: white;
+    padding: 0.2rem 0.6rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.text-truncate {
+    max-width: 300px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.btn-small {
+    background: var(--surface-light);
+    border: 1px solid var(--border);
+    color: white;
+    padding: 0.4rem 0.8rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: all 0.2s;
+}
+
+.btn-small:hover {
+    background: var(--primary);
+    border-color: var(--primary);
+}
+
+/* Detail Row */
+.detail-row {
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.plan-details-content {
+    padding: 1.5rem;
+    animation: slideDown 0.3s ease-out;
+}
+
+.details-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+}
+
+.details-section h4 {
+    margin-bottom: 1rem;
+    color: var(--text-primary);
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.timeline {
+    border-left: 2px solid var(--border);
+    padding-left: 1.5rem;
+    margin-left: 0.5rem;
+}
+
+.timeline-item {
+    position: relative;
+    margin-bottom: 1rem;
+}
+
+.timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -1.95rem;
+    top: 0.4rem;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--primary);
+    box-shadow: 0 0 0 4px var(--surface);
+}
+
+.timeline-break .timeline-item::before {
+    background: #f39c12;
+}
+
+.timeline-item .time {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    margin-bottom: 0.2rem;
+}
+
+.timeline-item .desc {
+    color: var(--text-secondary);
+}
+
+@keyframes slideDown {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 768px) {
+    .details-grid {
+        grid-template-columns: 1fr;
+    }
+    .text-truncate {
+        max-width: 150px;
+    }
+}
+
 .plan-date {
     color: var(--text-muted);
     font-size: 0.85rem;
