@@ -344,6 +344,8 @@ function switchTab(tabId) {
             datePicker.value = `${yyyy}-${mm}-${dd}`;
         }
         loadGPSLog();
+    } else if (tabId === 'tab-plans') {
+        loadPlans();
     }
 }
 
@@ -521,5 +523,120 @@ async function doExport() {
         closeExportModal();
     } catch (error) {
         showToast(error.message, "error");
+    }
+}
+
+// --- Operating Plans Logic ---
+
+async function loadPlans() {
+    const token = document.getElementById('admin-token').value;
+    const plate = document.getElementById('plan-plate-filter').value.trim();
+    const date = document.getElementById('plan-date-filter').value;
+    const container = document.getElementById('plans-container');
+
+    container.innerHTML = `<div class="loading-state">正在載入方案資料...</div>`;
+
+    let url = '/admin/bus_plans?';
+    if (plate) url += `plate_number=${plate}&`;
+    if (date) url += `date=${date}&`;
+
+    try {
+        const response = await fetch(url, { headers: { 'token': token } });
+        const plans = await response.json();
+        renderPlans(plans);
+    } catch (error) {
+        showToast("載入方案失敗", "error");
+    }
+}
+
+function renderPlans(plans) {
+    const container = document.getElementById('plans-container');
+    container.innerHTML = '';
+
+    if (!plans || plans.length === 0) {
+        container.innerHTML = `<div class="loading-state">尚無分析完成的方案。請先執行「批次分析」或調整查詢條件。</div>`;
+        return;
+    }
+
+    plans.forEach(plan => {
+        const card = document.createElement('div');
+        card.className = 'plan-card';
+        
+        const breakHtml = (plan.break_details || []).map(b => `
+            <div class="break-item">
+                <span>⏱️ ${b.start_time} - ${b.end_time}</span>
+                <span>📍 ${b.location}</span>
+            </div>
+        `).join('') || '<p>無中退紀錄</p>';
+
+        const routeHtml = (plan.route_details || []).map(r => `
+            <li>${r.start_time}-${r.end_time}: <strong>${r.route}</strong></li>
+        `).join('') || '<li>無詳細路線資料</li>';
+
+        card.innerHTML = `
+            <div class="plan-card-header">
+                <h3>${plan.plate_number} <span class="badge">${plan.plan_name}</span></h3>
+                <span class="plan-date">${plan.date}</span>
+            </div>
+            <div class="plan-card-body">
+                <div class="plan-summary">
+                    <label>當日路線總覽</label>
+                    <p>${plan.route_summary || '無'}</p>
+                </div>
+                <div class="plan-mileage">
+                    <label>當日估算總里程</label>
+                    <div class="mileage-value">${plan.total_mileage || 0} <small>KM</small></div>
+                </div>
+                <div class="plan-details-grid">
+                    <div class="plan-routes">
+                        <label>🕒 時段與路線</label>
+                        <ul>${routeHtml}</ul>
+                    </div>
+                    <div class="plan-breaks">
+                        <label>☕ 中退紀錄</label>
+                        ${breakHtml}
+                    </div>
+                </div>
+            </div>
+        `;
+        container.appendChild(card);
+    });
+}
+
+async function syncSchedules() {
+    const token = document.getElementById('admin-token').value;
+    showToast("正在從 TDX 同步台南與高雄時刻表...");
+    try {
+        // 同步高雄
+        const resK = await fetch('/admin/bus_plans/sync_schedules?city=Kaohsiung', {
+            method: 'POST', headers: { 'token': token }
+        }).then(r => r.json());
+        
+        // 同步台南
+        const resT = await fetch('/admin/bus_plans/sync_schedules?city=Tainan', {
+            method: 'POST', headers: { 'token': token }
+        }).then(r => r.json());
+        
+        showToast(`同步完成！高雄: ${resK.count} 筆, 台南: ${resT.count} 筆`);
+    } catch (error) {
+        showToast("同步失敗", "error");
+    }
+}
+
+async function analyzeAllLogs() {
+    const token = document.getElementById('admin-token').value;
+    if (!confirm("這將會分析所有現存的 GPS 紀錄，可能需要數分鐘時間且會消耗 AI 額度。確定開始？")) return;
+
+    showToast("AI 分析中，請勿關閉視窗...", "success");
+    try {
+        const response = await fetch('/admin/bus_plans/analyze_all', {
+            method: 'POST',
+            headers: { 'token': token }
+        });
+        const res = await response.json();
+        showToast(`分析完成！共產生 ${res.analyzed_count} 筆方案`);
+        loadPlans();
+    } catch (error) {
+        showToast("分析過程發生錯誤", "error");
     }
 }

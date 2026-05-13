@@ -142,3 +142,79 @@ class AIService:
                 "missing_info": "",
                 "suggestion": "AI 處理失敗，請人工檢查"
             }
+
+    async def analyze_bus_operating_plan(self, plate_number: str, date: str, gps_data: list, schedules: list):
+        """
+        分析公車一整天的營運方案。
+        gps_data: list of {route_name, lat, lon, recorded_at}
+        schedules: list of {route_name, departure_time}
+        """
+        # 整理 GPS 資料摘要，減少 token 使用
+        gps_summary = []
+        total_dist_km = 0
+        
+        from bus_service import _haversine_meters
+        
+        for i in range(len(gps_data)):
+            curr = gps_data[i]
+            gps_summary.append({
+                "t": curr["recorded_at"].split("T")[1][:5],
+                "r": curr["route_name"],
+                "lat": curr["lat"],
+                "lon": curr["lon"]
+            })
+            
+            if i > 0:
+                prev = gps_data[i-1]
+                dist = _haversine_meters(prev["lat"], prev["lon"], curr["lat"], curr["lon"])
+                total_dist_km += dist / 1000.0
+
+        prompt = f"""你是公車營運分析專家。請根據給定的 GPS 紀錄與班次時刻表，推估車號 {plate_number} 在 {date} 的營運方案。
+
+【GPS 紀錄摘要】(t=時間, r=當時顯示路線):
+{json.dumps(gps_summary, ensure_ascii=False)}
+
+【相關時刻表】(部分):
+{json.dumps(schedules[:100], ensure_ascii=False)}
+
+【任務】
+1. 識別當天行經的「路線序列」及其大致時段。
+2. 識別「中退時間 (Break Time)」：指公車長時間停留在場站、路邊或未執行路線的時間（通常超過 40 分鐘且位置固定）。
+3. 推估「中退地點」：中退發生時的概略位置或地標。
+4. 根據路線序列，判斷這是「方案一」還是「方案二」等（若為當天第一筆分析，請自訂為方案一）。
+5. 參考給出的估算里程：{total_dist_km:.2f} km，根據分析結果微調（例如加上場站往返里程）。
+
+請回傳 JSON 格式：
+{{
+  "plan_name": "營運方案一",
+  "route_summary": "路線A -> 路線B -> 路線A",
+  "total_mileage": 123.45,
+  "route_details": [
+    {{"route": "路線A", "start_time": "06:00", "end_time": "09:00"}},
+    ...
+  ],
+  "break_details": [
+    {{"start_time": "10:00", "end_time": "13:30", "location": "某某調度站"}}
+  ]
+}}
+"""
+        try:
+            print(f"AI Plan: Analyzing {plate_number} on {date}")
+            response = self.model.generate_content(prompt)
+            text = response.text.replace("```json", "").replace("```", "").strip()
+            result = json.loads(text)
+            
+            # 確保欄位存在
+            if "total_mileage" not in result:
+                result["total_mileage"] = round(total_dist_km, 2)
+                
+            return result
+        except Exception as e:
+            print(f"AI Plan Error: {e}")
+            return {
+                "plan_name": "分析失敗",
+                "route_summary": "無法推估",
+                "total_mileage": round(total_dist_km, 2),
+                "route_details": [],
+                "break_details": []
+            }

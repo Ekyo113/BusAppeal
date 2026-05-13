@@ -17,6 +17,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional
 from database import Database
 from config import Config
+from ai_service import AIService
 
 
 # ─────────────────────────────────────────
@@ -386,6 +387,113 @@ def _fetch_tdx_nearstop(city_code: str) -> list[dict]:
     except Exception as e:
         print(f"[BusService A2] TDX fetch failed ({city_code}): {e}")
         return []
+
+def _fetch_tdx_schedules(city_code: str) -> list[dict]:
+    """呼叫 TDX 公車時刻表 API。"""
+    token = _get_tdx_token()
+    url = f"{TDX_BASE_URL}/v2/Bus/Schedule/City/{city_code}"
+    params = {
+        "$format": "JSON",
+    }
+    headers = {"Authorization": f"Bearer {token}"}
+
+    try:
+        resp = httpx.get(url, params=params, headers=headers, timeout=30)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        print(f"[BusService Schedule] TDX fetch failed ({city_code}): {e}")
+        return []
+
+def sync_route_schedules(city_code: str):
+    """將 TDX 時刻表同步至資料庫快取。"""
+    schedules = _fetch_tdx_schedules(city_code)
+    if not schedules:
+        return 0
+
+    records = []
+    for route in schedules:
+        route_name = route.get("RouteName", {}).get("Zh_tw", "")
+        direction = route.get("Direction", 0)
+        timetables = route.get("Timetables", [])
+        
+        for entry in timetables:
+            # 有些是定時發車，有些是區間
+            stop_times = entry.get("StopTimes", [])
+            if stop_times:
+                # 取第一站的發車時間作為代表
+                dept_time = stop_times[0].get("DepartureTime", "")
+                if dept_time:
+                    records.append({
+                        "city_code": city_code,
+                        "route_name": route_name,
+                        "direction": direction,
+                        "departure_time": dept_time
+                    })
+
+    if records:
+        client = Database.get_client()
+        # 先清理舊資料
+        client.table("bus_route_schedules").delete().eq("city_code", city_code).execute()
+        # 批次寫入 (每 500 筆一組)
+        for i in range(0, len(records), 500):
+            client.table("bus_route_schedules").insert(records[i:i+500]).execute()
+    
+    return len(records)
+
+async def generate_bus_plan(plate_number: str, date: str):
+    """分析特定車號與日期的營運方案。"""
+    client = Database.get_client()
+    
+    # 1. 抓取 GPS 紀錄
+    start_time = f"{date}T00:00:00"
+    end_time = f"{date}T23:59:59"
+    
+    gps_res = client.table("weekly_bus_gps_log")\
+        .select("route_name, lat, lon, recorded_at")\
+        .eq("plate_number", plate_number)\
+        .gte("recorded_at", start_time)\
+        .lte("recorded_at", end_time)\
+        .order("recorded_at")\
+        .execute()
+    
+    gps_data = gps_res.data
+    if not gps_data:
+        return None
+
+    # 2. 抓取快取的時刻表
+    # 先從 GPS 資料中萃取出當天跑過的路線，縮小搜尋範圍
+    routes = list(set([r["route_name"] for r in gps_data if r.get("route_name")]))
+    
+    schedule_res = client.table("bus_route_schedules")\
+        .select("route_name, departure_time")\
+        .in_("route_name", routes)\
+        .execute()
+    
+    schedules = schedule_res.data
+
+    # 3. 呼叫 AI 分析
+    ai = AIService()
+    analysis = await ai.analyze_bus_operating_plan(plate_number, date, gps_data, schedules)
+
+    # 4. 判斷方案名稱 (根據歷史紀錄)
+    # 這裡簡化處理：如果內容與現有方案相似則沿用名稱，否則遞增。
+    # 實務上交給 AI 判斷或是比對 route_summary。
+    
+    plan_data = {
+        "plate_number": plate_number,
+        "date": date,
+        "plan_name": analysis.get("plan_name", "營運方案一"),
+        "route_summary": analysis.get("route_summary"),
+        "total_mileage": analysis.get("total_mileage"),
+        "route_details": analysis.get("route_details"),
+        "break_details": analysis.get("break_details")
+    }
+
+    # 5. 存入資料庫 (Upsert)
+    client.table("bus_operating_plans").upsert(plan_data, on_conflict="plate_number, date").execute()
+    
+    return plan_data
 
 
 def fetch_cities() -> list[dict]:

@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 import pytz
 from fastapi.responses import StreamingResponse
 from export_service import ExportService
+import bus_service
 
 router = APIRouter(prefix="/admin")
 
@@ -105,3 +106,57 @@ async def export_pdf(type: str, start: str, end: str, token: str = Header(None))
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"}
     )
+
+@router.get("/bus_plans")
+async def get_bus_plans(plate_number: str = None, date: str = None, token: str = Header(None)):
+    verify_token(token)
+    client = Database.get_client()
+    query = client.table("bus_operating_plans").select("*")
+    if plate_number:
+        query = query.eq("plate_number", plate_number)
+    if date:
+        query = query.eq("date", date)
+    
+    response = query.order("date", desc=True).execute()
+    return response.data
+
+@router.post("/bus_plans/sync_schedules")
+async def sync_schedules(city: str = "Kaohsiung", token: str = Header(None)):
+    verify_token(token)
+    count = bus_service.sync_route_schedules(city)
+    return {"status": "success", "count": count}
+
+@router.post("/bus_plans/analyze_all")
+async def analyze_all_logs(token: str = Header(None)):
+    verify_token(token)
+    client = Database.get_client()
+    
+    # 1. 找出所有已存在的方案，避免重複分析
+    existing_plans_res = client.table("bus_operating_plans").select("plate_number, date").execute()
+    existing_pairs = set()
+    for row in existing_plans_res.data:
+        existing_pairs.add((row["plate_number"], row["date"]))
+
+    # 2. 找出所有有 GPS 紀錄的車號與日期
+    res = client.table("weekly_bus_gps_log")\
+        .select("plate_number, recorded_at")\
+        .order("recorded_at", desc=True)\
+        .execute()
+    
+    unique_pairs = set()
+    for row in res.data:
+        date = row["recorded_at"].split("T")[0]
+        pair = (row["plate_number"], date)
+        if pair not in existing_pairs:
+            unique_pairs.add(pair)
+    
+    if not unique_pairs:
+        return {"status": "success", "message": "所有數據皆已分析完成，無須重複分析。", "analyzed_count": 0}
+
+    results = []
+    for plate, date in unique_pairs:
+        plan = await bus_service.generate_bus_plan(plate, date)
+        if plan:
+            results.append(plan)
+            
+    return {"status": "success", "analyzed_count": len(results)}

@@ -45,6 +45,7 @@
         <div class="tabs-container">
             <button class="tab-btn active" onclick="switchTab('tab-reports')">通報管理</button>
             <button class="tab-btn" onclick="switchTab('tab-gps')">車輛每日紀錄</button>
+            <button class="tab-btn" onclick="switchTab('tab-plans')">營運方案分析</button>
         </div>
 
         <main>
@@ -111,6 +112,29 @@
                     </div>
                     <div class="gps-chart-container">
                         <div id="gps-timeline-chart"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab: Operating Plans -->
+            <div id="tab-plans" class="tab-content hidden">
+                <div class="plans-section">
+                    <div class="section-header-row">
+                        <h2>📊 車輛營運方案與中退分析</h2>
+                        <div class="plans-controls">
+                            <button class="btn-secondary" onclick="syncSchedules()">🔄 同步時刻表</button>
+                            <button class="btn-primary" onclick="analyzeAllLogs()">🧠 批次分析現有紀錄</button>
+                        </div>
+                    </div>
+                    
+                    <div class="plans-filter">
+                        <input type="text" id="plan-plate-filter" placeholder="車號 (如: EAL-0001)" onkeypress="if(event.key === 'Enter') loadPlans()">
+                        <input type="date" id="plan-date-filter" onchange="loadPlans()">
+                        <button class="btn-refresh" onclick="loadPlans()">查詢方案</button>
+                    </div>
+
+                    <div id="plans-container" class="plans-list">
+                        <!-- Plans cards will be injected here -->
                     </div>
                 </div>
             </div>
