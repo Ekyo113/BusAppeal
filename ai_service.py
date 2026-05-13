@@ -14,8 +14,17 @@ class AIService:
             print(f"AI Service Diagnostic: Key starts with {key[:5]}... and ends with ...{key[-5:]}")
         
         genai.configure(api_key=key)
-        # 配合配額限制，改用 gemini-2.5-flash-lite
-        self.model = genai.GenerativeModel('gemini-2.5-flash-lite')
+        genai.configure(api_key=key)
+        # 使用最穩定的 1.5 Flash 版本
+        self.model = genai.GenerativeModel(
+            model_name='gemini-1.5-flash',
+            safety_settings=[
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+            ]
+        )
         
         try:
             # 異步環境下同步呼叫 list_models 僅用於啟動時診斷
@@ -202,8 +211,18 @@ class AIService:
         try:
             print(f"AI Plan: Analyzing {plate_number} on {date}")
             response = self.model.generate_content(prompt)
-            text = response.text.replace("```json", "").replace("```", "").strip()
-            result = json.loads(text)
+            raw_text = response.text
+            print(f"AI Plan: Raw response received (len: {len(raw_text)})")
+            
+            # 使用 Regex 擷取 JSON 區塊
+            json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
+            if json_match:
+                cleaned_text = json_match.group()
+                result = json.loads(cleaned_text)
+            else:
+                # 備案：清理 markdown 標籤
+                cleaned_text = raw_text.replace("```json", "").replace("```", "").strip()
+                result = json.loads(cleaned_text)
             
             # 確保欄位存在
             if "total_mileage" not in result:
@@ -212,6 +231,8 @@ class AIService:
             return result
         except Exception as e:
             print(f"AI Plan Error: {e}")
+            if 'raw_text' in locals():
+                print(f"AI Plan: Failed raw text: {raw_text[:200]}...")
             return {
                 "plan_name": "分析失敗",
                 "route_summary": "無法推估",
