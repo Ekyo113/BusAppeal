@@ -15,9 +15,9 @@ def collect_weekly_bus_data():
     tz = pytz.timezone('Asia/Taipei')
     now = datetime.now(tz)
     
-    # Only record between 2026-05-08 and 2026-05-15
+    # Only record between 2026-05-08 and 2026-05-17 23:30
     start_date = datetime(2026, 5, 8, tzinfo=tz)
-    end_date = datetime(2026, 5, 15, 23, 59, 59, tzinfo=tz)
+    end_date = datetime(2026, 5, 17, 23, 30, 0, tzinfo=tz)
     
     if not (start_date <= now <= end_date):
         return
@@ -27,8 +27,10 @@ def collect_weekly_bus_data():
     if (5 * 60 + 30) <= minutes <= (23 * 60):
         try:
             from database import Database
-            # Only record Kaohsiung
-            data = bus_service.fetch_bus_status("Kaohsiung", force_a2=False)
+            # 5/17 紀錄台南，其餘 (5/15, 5/16) 紀錄高雄
+            target_city = "Tainan" if now.month == 5 and now.day == 17 else "Kaohsiung"
+            
+            data = bus_service.fetch_bus_status(target_city, force_a2=False)
             buses = data.get("buses", [])
             
             records = []
