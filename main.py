@@ -39,6 +39,8 @@ def collect_weekly_bus_data():
                         "route_name": bus["route_name"],
                         "lat": bus["lat"],
                         "lon": bus["lon"],
+                        "is_operating": bus["is_operating"],
+                        "speed": bus.get("speed", 0),
                         "recorded_at": now.isoformat()
                     })
             

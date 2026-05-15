@@ -249,6 +249,7 @@ def fetch_bus_status(city_code: str, force_a2: bool = False) -> dict:
             lat = pos.get("PositionLat")
             lon = pos.get("PositionLon")
             route_name_tdx = ((tdx_rec or ns_rec).get("RouteName") or {}).get("Zh_tw", "")
+            speed = (tdx_rec or {}).get("Speed", 0)
 
             # 站點資訊從 A2 (RealTimeNearStop) 或是 A1 (如果有的話) 取
             cur_stop = ""
@@ -263,10 +264,13 @@ def fetch_bus_status(city_code: str, force_a2: bool = False) -> dict:
             stop_name = cur_stop or meta.get("last_stop_name") or ""
             
             stop_seq  = (ns_rec or tdx_rec or {}).get("StopSequence") or 0
+            
+            # 從 TDX 取得原始 BusStatus (0: 正常, 100: 營運中, 90: 非營運...)
+            raw_status = (tdx_rec or ns_rec or {}).get("BusStatus", 0)
 
             # 暫以 StopSequence <= 1 做起始站判斷
             is_terminal = (stop_seq <= 1)
-            is_operating = True
+            is_operating = raw_status in [0, 100]
 
             # 寫入 GPS 快照
             if lat and lon:
@@ -296,6 +300,7 @@ def fetch_bus_status(city_code: str, force_a2: bool = False) -> dict:
             stop_name = ""
             stop_seq  = 0
             route_name_tdx = ""
+            speed = 0
             is_operating = False
             bus_status = "not_operating"
             stalled_sec = 0
@@ -316,6 +321,8 @@ def fetch_bus_status(city_code: str, force_a2: bool = False) -> dict:
             "last_lon":             meta.get("last_lon"),
             "last_gps_time":        meta.get("last_gps_time"),
             "is_operating":         is_operating,
+            "raw_status":           raw_status if (tdx_rec or ns_rec) else 255,
+            "speed":                speed,
             "status":               bus_status,          # operating | attention | not_operating | incident
             "stalled_seconds":      stalled_sec,
             "has_incident":         bool(incident),
