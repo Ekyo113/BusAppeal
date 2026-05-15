@@ -27,8 +27,11 @@ def collect_weekly_bus_data():
     if (5 * 60 + 30) <= minutes <= (23 * 60):
         try:
             from database import Database
-            # 從 5/15 起改為紀錄台南 (原本為高雄)
-            target_city = "Tainan" if now.month == 5 and now.day >= 15 else "Kaohsiung"
+            # 排程：5/15 台南, 5/16 高雄, 5/17 台南
+            if now.month == 5 and now.day in [15, 17]:
+                target_city = "Tainan"
+            else:
+                target_city = "Kaohsiung"
             
             data = bus_service.fetch_bus_status(target_city, force_a2=False)
             buses = data.get("buses", [])
