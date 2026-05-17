@@ -67,6 +67,14 @@ def _get_tdx_token() -> str:
 # Haversine 距離計算
 # ─────────────────────────────────────────
 
+def _haversine_meters(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """計算兩個 GPS 座標之間的距離（公尺）。"""
+    if lat1 is None or lon1 is None or lat2 is None or lon2 is None:
+        return 0
+    R = 6_371_000  # 地球半徑（公尺）
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
     a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
@@ -453,67 +461,102 @@ def sync_specific_route_schedules(city_code: str, route_name: str):
     return len(records)
 
 def sync_route_schedules(city_code: str):
-    """將 TDX 時刻表同步至資料庫快取。"""
-    print(f"[BusService] Syncing schedules for {city_code}...")
-    schedules = _fetch_tdx_schedules(city_code)
-    if not schedules:
-        print(f"[BusService] No schedules found for {city_code}")
-        return 0
-
+    """從 weekly_bus_gps_log 既有的路線中，更新該城市的路線時刻表。"""
+    print(f"[BusService] Syncing schedules for {city_code} from weekly_bus_gps_log routes...")
     client = Database.get_client()
-    # 先清理舊資料
-    client.table("bus_route_schedules").delete().eq("city_code", city_code).execute()
+    
+    # 1. 取得該城市所有監控車輛的車牌
+    try:
+        monitored_res = client.table("monitored_buses").select("plate_number").eq("city_code", city_code).execute()
+        city_plates = [row["plate_number"] for row in monitored_res.data]
+    except Exception as e:
+        print(f"[BusService] Failed to fetch monitored buses for {city_code}: {e}")
+        return 0
+        
+    if not city_plates:
+        print(f"[BusService] No monitored buses found for {city_code}")
+        return 0
+        
+    # 2. 取得 weekly_bus_gps_log 中屬於 these 車牌的唯一路線
+    try:
+        res = client.table("weekly_bus_gps_log").select("route_name").in_("plate_number", city_plates).execute()
+    except Exception as e:
+        print(f"[BusService] Failed to fetch weekly_bus_gps_log for route syncing: {e}")
+        return 0
+        
+    routes = set()
+    for row in res.data:
+        route = row.get("route_name", "")
+        if route:
+            routes.add(route)
+            
+    routes = sorted(list(routes))
+    print(f"[BusService] Unique routes found for {city_code}: {routes}")
+    
+    if not routes:
+        print(f"[BusService] No routes found in weekly_bus_gps_log for {city_code}")
+        return 0
+        
+    # 2. 清理該城市的 bus_route_schedules
+    try:
+        client.table("bus_route_schedules").delete().eq("city_code", city_code).in_("route_name", routes).execute()
+    except Exception as e:
+        print(f"[BusService] Failed to clean old schedules: {e}")
+        
+    # 3. 逐一同步這些路線
+    total_count = 0
+    for route in routes:
+        try:
+            count = sync_specific_route_schedules(city_code, route)
+            total_count += count
+            time.sleep(0.5)
+        except Exception as e:
+            print(f"[BusService] Error syncing route {route}: {e}")
+            
+    print(f"[BusService] Finished syncing schedules for {city_code}. Total {total_count} records saved.")
+    return total_count
 
-    count = 0
-    records = []
-    
-    # 分批處理，避免 records 列表過大消耗記憶體
-    for route in schedules:
-        route_name = route.get("RouteName", {}).get("Zh_tw", "")
-        direction = route.get("Direction", 0)
-        timetables = route.get("Timetables", [])
-        
-        for entry in timetables:
-            stop_times = entry.get("StopTimes", [])
-            if stop_times:
-                dept_time = stop_times[0].get("DepartureTime", "")
-                if dept_time:
-                    records.append({
-                        "city_code": city_code,
-                        "route_name": route_name,
-                        "direction": direction,
-                        "departure_time": dept_time
-                    })
-        
-        # 每累積 500 筆就寫入一次並清空，節省記憶體
-        if len(records) >= 500:
-            client.table("bus_route_schedules").insert(records).execute()
-            count += len(records)
-            records = []
-    
-    # 寫入剩餘資料
-    if records:
-        client.table("bus_route_schedules").insert(records).execute()
-        count += len(records)
-    
-    # 手動回收記憶體
-    del schedules
-    gc.collect()
-    
-    print(f"[BusService] Sync finished. Total {count} records saved.")
-    return count
+def _find_closest_schedule_time(route_name: str, target_dt: datetime, schedules: list) -> tuple[Optional[datetime], Optional[str]]:
+    route_schedules = [s for s in schedules if s["route_name"].strip() == route_name.strip()]
+    if not route_schedules:
+        return None, None
+
+    closest_dt = None
+    min_diff = None
+    matched_time_str = None
+
+    for s in route_schedules:
+        dep_time_str = s["departure_time"] # 格式如 "05:55"
+        try:
+            dep_hour, dep_min = map(int, dep_time_str.split(":"))
+            base_dt = target_dt.replace(hour=dep_hour, minute=dep_min, second=0, microsecond=0)
+            candidates = [
+                base_dt - timedelta(days=1),
+                base_dt,
+                base_dt + timedelta(days=1)
+            ]
+            for cand in candidates:
+                diff = abs((target_dt - cand).total_seconds())
+                if min_diff is None or diff < min_diff:
+                    min_diff = diff
+                    closest_dt = cand
+                    matched_time_str = dep_time_str
+        except Exception:
+            continue
+
+    return closest_dt, matched_time_str
 
 async def generate_bus_plan(plate_number: str, date: str):
     """分析特定車號與日期的營運方案。"""
     print(f"[BusService] Generating plan for {plate_number} on {date}...")
     client = Database.get_client()
     
-    # 1. 抓取 GPS 紀錄
+    # 1. 抓取 GPS 紀錄 (確保包括 is_operating 與 speed)
     start_time = f"{date}T00:00:00"
     end_time = f"{date}T23:59:59"
     
     gps_res = client.table("weekly_bus_gps_log")\
-        .select("route_name, lat, lon, recorded_at")\
+        .select("route_name, lat, lon, recorded_at, is_operating, speed")\
         .eq("plate_number", plate_number)\
         .gte("recorded_at", start_time)\
         .lte("recorded_at", end_time)\
@@ -522,25 +565,66 @@ async def generate_bus_plan(plate_number: str, date: str):
     
     gps_data = []
     for row in gps_res.data:
-        # 將 UTC 時間轉換為台灣時間 (UTC+8)
         try:
-            utc_dt = datetime.fromisoformat(row["recorded_at"].replace("Z", "+00:00"))
+            ts = row["recorded_at"].replace(" ", "T")
+            if "+" in ts:
+                ts = ts.split("+")[0] + "Z"
+            utc_dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
             tw_dt = utc_dt + timedelta(hours=8)
-            row["recorded_at_tw"] = tw_dt.isoformat()
+            row["recorded_at_tw"] = tw_dt
             gps_data.append(row)
-        except:
-            gps_data.append(row)
+        except Exception as e:
+            print(f"[BusService] Time parse error: {row.get('recorded_at')} -> {e}")
             
     if not gps_data:
         print(f"[BusService] No GPS logs found for {plate_number} on {date}")
         return None
 
-    # 2. 識別當天出現過的路線，並確保快取中有資料
+    # 2. 篩選「原地中退」點 (與上一點位置差異極小)
+    filtered_gps = []
+    stationary_count = 0
+    last_lat, last_lon = None, None
+    for row in gps_data:
+        curr_lat = row.get("lat")
+        curr_lon = row.get("lon")
+        if last_lat is not None and last_lon is not None:
+            if abs(curr_lat - last_lat) < 0.0001 and abs(curr_lon - last_lon) < 0.0001:
+                stationary_count += 1
+                continue
+        filtered_gps.append(row)
+        last_lat, last_lon = curr_lat, curr_lon
+    gps_data = filtered_gps
+
+    # 計算總里程 (Haversine)
+    total_dist_km = 0.0
+    for i in range(1, len(gps_data)):
+        prev = gps_data[i-1]
+        curr = gps_data[i]
+        try:
+            if prev.get("lat") is not None and prev.get("lon") is not None and curr.get("lat") is not None and curr.get("lon") is not None:
+                dist = _haversine_meters(float(prev["lat"]), float(prev["lon"]), float(curr["lat"]), float(curr["lon"]))
+                total_dist_km += dist / 1000.0
+        except Exception:
+            continue
+    total_mileage = round(total_dist_km, 2)
+
+    # 3. 識別當天出現過的路線，並確保快取中有資料
     routes = sorted(list(set([r["route_name"] for r in gps_data if r.get("route_name")])))
-    city_code = "Kaohsiung" if plate_number.startswith("EAL") else "Tainan"
+    
+    # 根據資料庫中受監控車輛判定正確的城市
+    city_code = "Tainan"  # 預設
+    try:
+        bus_check = client.table("monitored_buses")\
+            .select("city_code")\
+            .eq("plate_number", plate_number)\
+            .limit(1)\
+            .execute()
+        if bus_check.data:
+            city_code = bus_check.data[0]["city_code"]
+    except Exception as e:
+        print(f"[BusService] Failed to check city_code for {plate_number}: {e}")
 
     for route in routes:
-        # 檢查快取
         cache_check = client.table("bus_route_schedules")\
             .select("id")\
             .eq("city_code", city_code)\
@@ -552,7 +636,7 @@ async def generate_bus_plan(plate_number: str, date: str):
             print(f"[BusService] Cache miss for {route}, syncing now...")
             sync_specific_route_schedules(city_code, route)
 
-    # 3. 抓取快取的時刻表 (僅限相關路線)
+    # 4. 抓取快取的時刻表 (僅限相關路線)
     schedule_res = client.table("bus_route_schedules")\
         .select("route_name, departure_time")\
         .eq("city_code", city_code)\
@@ -560,25 +644,128 @@ async def generate_bus_plan(plate_number: str, date: str):
         .execute()
     
     schedules = schedule_res.data
-    
-    # 4. 呼叫 AI 進行分析
-    ai_service = AIService()
-    analysis = await ai_service.analyze_bus_operating_plan(
-        plate_number, date, gps_data, schedules
-    )
 
-    # 4. 判斷方案名稱 (根據歷史紀錄)
-    # 這裡簡化處理：如果內容與現有方案相似則沿用名稱，否則遞增。
-    # 實務上交給 AI 判斷或是比對 route_summary。
+    # 5. 執行狀態移轉比對演算法
+    prev_operating = False
+    transitions = []
+
+    for i, row in enumerate(gps_data):
+        curr_operating = row.get("is_operating", False)
+        route_name = row.get("route_name", "")
+        tw_time = row["recorded_at_tw"]
+
+        # 檢測狀態移轉
+        if not prev_operating and curr_operating:
+            matched_dt, matched_str = _find_closest_schedule_time(route_name, tw_time, schedules)
+            transitions.append({
+                "type": "開班 (Start)",
+                "gps_time": tw_time,
+                "route": route_name,
+                "matched_time": matched_str or tw_time.strftime("%H:%M"),
+                "matched_dt": matched_dt or tw_time
+            })
+        elif prev_operating and not curr_operating:
+            matched_dt, matched_str = _find_closest_schedule_time(route_name, tw_time, schedules)
+            transitions.append({
+                "type": "收班 (End)",
+                "gps_time": tw_time,
+                "route": route_name,
+                "matched_time": matched_str or tw_time.strftime("%H:%M"),
+                "matched_dt": matched_dt or tw_time
+            })
+        
+        prev_operating = curr_operating
+
+    ongoing_trip = None
+    if prev_operating and len(gps_data) > 0:
+        last_start = None
+        for t in reversed(transitions):
+            if t["type"] == "開班 (Start)":
+                last_start = t
+                break
+        if last_start:
+            ongoing_trip = last_start
+
+    # 組合成 Trips
+    trips = []
+    current_trip = None
+    for t in transitions:
+        if t["type"] == "開班 (Start)":
+            if current_trip is not None:
+                trips.append(current_trip)
+            current_trip = {"start": t, "end": None}
+        elif t["type"] == "收班 (End)":
+            if current_trip is not None:
+                current_trip["end"] = t
+                trips.append(current_trip)
+                current_trip = None
+            else:
+                trips.append({"start": None, "end": t})
+
+    # 轉為 route_details 格式
+    route_details = []
+    for trip in trips:
+        start = trip["start"]
+        end = trip["end"]
+        route_str = start["route"] if start else (end["route"] if end else "未知")
+        start_str = start["matched_time"] if start else "未知"
+        end_str = end["matched_time"] if end else "未知"
+        route_details.append({
+            "route": route_str,
+            "start_time": start_str,
+            "end_time": end_str
+        })
     
+    if ongoing_trip:
+        route_details.append({
+            "route": ongoing_trip["route"],
+            "start_time": ongoing_trip["matched_time"],
+            "end_time": "未完結/營運中"
+        })
+
+    # 計算中退
+    break_details = []
+    for i in range(len(trips) - 1):
+        prev_trip = trips[i]
+        next_trip = trips[i+1]
+        if prev_trip["end"] and next_trip["start"]:
+            end_dt = prev_trip["end"]["matched_dt"]
+            start_dt = next_trip["start"]["matched_dt"]
+            if end_dt and start_dt:
+                duration_mins = int((start_dt - end_dt).total_seconds() / 60)
+                break_details.append({
+                    "start_time": prev_trip["end"]["matched_time"],
+                    "end_time": next_trip["start"]["matched_time"],
+                    "location": "場站/路邊",
+                    "duration_mins": duration_mins
+                })
+
+    if trips and trips[-1]["end"] and ongoing_trip:
+        end_dt = trips[-1]["end"]["matched_dt"]
+        start_dt = ongoing_trip["matched_dt"]
+        if end_dt and start_dt:
+            duration_mins = int((start_dt - end_dt).total_seconds() / 60)
+            break_details.append({
+                "start_time": trips[-1]["end"]["matched_time"],
+                "end_time": ongoing_trip["matched_time"],
+                "location": "場站/路邊",
+                "duration_mins": duration_mins
+            })
+
+    # 組成 route_summary
+    summary_routes = []
+    for r_detail in route_details:
+        summary_routes.append(r_detail["route"])
+    route_summary = " -> ".join(summary_routes) if summary_routes else "無營運路線"
+
     plan_data = {
         "plate_number": plate_number,
         "date": date,
-        "plan_name": analysis.get("plan_name", "營運方案一"),
-        "route_summary": analysis.get("route_summary"),
-        "total_mileage": analysis.get("total_mileage"),
-        "route_details": analysis.get("route_details"),
-        "break_details": analysis.get("break_details")
+        "plan_name": "營運方案一",
+        "route_summary": route_summary,
+        "total_mileage": total_mileage,
+        "route_details": route_details,
+        "break_details": break_details
     }
 
     # 5. 存入資料庫 (Upsert)
