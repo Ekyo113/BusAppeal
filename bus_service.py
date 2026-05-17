@@ -524,6 +524,7 @@ def _find_closest_schedule_time(route_name: str, target_dt: datetime, schedules:
     if not route_schedules:
         return None, None
 
+    # 第一階段：嘗試依據指定的 direction 篩選「當天」的候選時間
     closest_dt = None
     min_diff = None
     matched_time_str = None
@@ -532,32 +533,44 @@ def _find_closest_schedule_time(route_name: str, target_dt: datetime, schedules:
         dep_time_str = s["departure_time"] # 格式如 "05:55"
         try:
             dep_hour, dep_min = map(int, dep_time_str.split(":"))
-            base_dt = target_dt.replace(hour=dep_hour, minute=dep_min, second=0, microsecond=0)
-            candidates = [
-                base_dt - timedelta(days=1),
-                base_dt,
-                base_dt + timedelta(days=1)
-            ]
-            for cand in candidates:
-                diff_sec = (target_dt - cand).total_seconds()
+            # 強制候選時間與 target_dt 在同一天
+            cand = target_dt.replace(hour=dep_hour, minute=dep_min, second=0, microsecond=0)
+            
+            diff_sec = (target_dt - cand).total_seconds()
+            
+            # 檢查方向需求
+            if direction == "before":
+                if diff_sec < 0:
+                    continue
+            elif direction == "after":
+                if diff_sec > 0:
+                    continue
+            
+            diff = abs(diff_sec)
+            if min_diff is None or diff < min_diff:
+                min_diff = diff
+                closest_dt = cand
+                matched_time_str = dep_time_str
+        except Exception:
+            continue
+
+    # 第二階段：如果在當天特定的方向限制下找不到班表（例如最後一筆 GPS 是 16:40，但當天該路線 16:40 以後完全沒有排班）
+    # 則安全回退（Fallback）為「當天最接近的班表」（等同於當天的 direction="closest"），絕對不能跨日匹配到隔天早上！
+    if closest_dt is None:
+        min_diff = None
+        for s in route_schedules:
+            dep_time_str = s["departure_time"]
+            try:
+                dep_hour, dep_min = map(int, dep_time_str.split(":"))
+                cand = target_dt.replace(hour=dep_hour, minute=dep_min, second=0, microsecond=0)
                 
-                # Check direction requirements
-                if direction == "before":
-                    # must be <= target_dt, i.e. diff_sec >= 0
-                    if diff_sec < 0:
-                        continue
-                elif direction == "after":
-                    # must be >= target_dt, i.e. diff_sec <= 0
-                    if diff_sec > 0:
-                        continue
-                
-                diff = abs(diff_sec)
+                diff = abs((target_dt - cand).total_seconds())
                 if min_diff is None or diff < min_diff:
                     min_diff = diff
                     closest_dt = cand
                     matched_time_str = dep_time_str
-        except Exception:
-            continue
+            except Exception:
+                continue
 
     return closest_dt, matched_time_str
 
