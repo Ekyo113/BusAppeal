@@ -733,6 +733,45 @@ async def generate_bus_plan(plate_number: str, date: str):
                 # 已經處理好間隔移轉，繼續下一點
                 continue
 
+        # 檢測路線變更的情況 (即使狀態都是營運中，也自動切分)
+        if i > 0 and prev_operating and curr_operating:
+            prev_row = gps_data[i-1]
+            prev_tw_time = prev_row["recorded_at_tw"]
+            prev_route = prev_row.get("route_name", "").strip()
+            curr_route = route_name.strip()
+            
+            if prev_route and curr_route and prev_route != curr_route:
+                # 結束前一趟
+                matched_dt, matched_str = _find_closest_schedule_time(
+                    prev_route, prev_tw_time, schedules, direction="closest"
+                )
+                transitions.append({
+                    "type": "收班 (End)",
+                    "gps_time": prev_tw_time,
+                    "route": prev_route,
+                    "matched_time": matched_str or prev_tw_time.strftime("%H:%M"),
+                    "matched_dt": matched_dt or prev_tw_time,
+                    "lat": prev_row.get("lat"),
+                    "lon": prev_row.get("lon")
+                })
+                
+                # 開始新一趟
+                matched_dt, matched_str = _find_closest_schedule_time(
+                    curr_route, tw_time, schedules, direction="closest"
+                )
+                transitions.append({
+                    "type": "開班 (Start)",
+                    "gps_time": tw_time,
+                    "route": curr_route,
+                    "matched_time": matched_str or tw_time.strftime("%H:%M"),
+                    "matched_dt": matched_dt or tw_time,
+                    "lat": row.get("lat"),
+                    "lon": row.get("lon")
+                })
+                
+                prev_operating = True
+                continue
+
         # 正常狀態移轉檢測
         if not prev_operating and curr_operating:
             # 如果是當日第一筆 GPS 資料就是營運中，採用 direction="before" (發車時間前推)
