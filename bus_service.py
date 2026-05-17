@@ -516,7 +516,7 @@ def sync_route_schedules(city_code: str):
     print(f"[BusService] Finished syncing schedules for {city_code}. Total {total_count} records saved.")
     return total_count
 
-def _find_closest_schedule_time(route_name: str, target_dt: datetime, schedules: list) -> tuple[Optional[datetime], Optional[str]]:
+def _find_closest_schedule_time(route_name: str, target_dt: datetime, schedules: list, direction: str = "closest") -> tuple[Optional[datetime], Optional[str]]:
     route_schedules = [s for s in schedules if s["route_name"].strip() == route_name.strip()]
     if not route_schedules:
         return None, None
@@ -536,7 +536,19 @@ def _find_closest_schedule_time(route_name: str, target_dt: datetime, schedules:
                 base_dt + timedelta(days=1)
             ]
             for cand in candidates:
-                diff = abs((target_dt - cand).total_seconds())
+                diff_sec = (target_dt - cand).total_seconds()
+                
+                # Check direction requirements
+                if direction == "before":
+                    # must be <= target_dt, i.e. diff_sec >= 0
+                    if diff_sec < 0:
+                        continue
+                elif direction == "after":
+                    # must be >= target_dt, i.e. diff_sec <= 0
+                    if diff_sec > 0:
+                        continue
+                
+                diff = abs(diff_sec)
                 if min_diff is None or diff < min_diff:
                     min_diff = diff
                     closest_dt = cand
@@ -654,9 +666,53 @@ async def generate_bus_plan(plate_number: str, date: str):
         route_name = row.get("route_name", "")
         tw_time = row["recorded_at_tw"]
 
-        # 檢測狀態移轉
+        # 檢測時間間隔大於 30 分鐘的情況 (即使狀態沒變，也自動切分並視為中退)
+        if i > 0:
+            prev_row = gps_data[i-1]
+            prev_tw_time = prev_row["recorded_at_tw"]
+            gap_mins = (tw_time - prev_tw_time).total_seconds() / 60.0
+            
+            if gap_mins > 30.0:
+                # 結束前一趟
+                if prev_operating:
+                    matched_dt, matched_str = _find_closest_schedule_time(
+                        prev_row.get("route_name", ""), prev_tw_time, schedules, direction="closest"
+                    )
+                    transitions.append({
+                        "type": "收班 (End)",
+                        "gps_time": prev_tw_time,
+                        "route": prev_row.get("route_name", ""),
+                        "matched_time": matched_str or prev_tw_time.strftime("%H:%M"),
+                        "matched_dt": matched_dt or prev_tw_time,
+                        "lat": prev_row.get("lat"),
+                        "lon": prev_row.get("lon")
+                    })
+                    prev_operating = False
+                
+                # 開始新一趟
+                if curr_operating:
+                    matched_dt, matched_str = _find_closest_schedule_time(
+                        route_name, tw_time, schedules, direction="closest"
+                    )
+                    transitions.append({
+                        "type": "開班 (Start)",
+                        "gps_time": tw_time,
+                        "route": route_name,
+                        "matched_time": matched_str or tw_time.strftime("%H:%M"),
+                        "matched_dt": matched_dt or tw_time,
+                        "lat": row.get("lat"),
+                        "lon": row.get("lon")
+                    })
+                    prev_operating = True
+                
+                # 已經處理好間隔移轉，繼續下一點
+                continue
+
+        # 正常狀態移轉檢測
         if not prev_operating and curr_operating:
-            matched_dt, matched_str = _find_closest_schedule_time(route_name, tw_time, schedules)
+            # 如果是當日第一筆 GPS 資料就是營運中，採用 direction="before" (發車時間前推)
+            dir_mode = "before" if i == 0 else "closest"
+            matched_dt, matched_str = _find_closest_schedule_time(route_name, tw_time, schedules, direction=dir_mode)
             transitions.append({
                 "type": "開班 (Start)",
                 "gps_time": tw_time,
@@ -667,7 +723,7 @@ async def generate_bus_plan(plate_number: str, date: str):
                 "lon": row.get("lon")
             })
         elif prev_operating and not curr_operating:
-            matched_dt, matched_str = _find_closest_schedule_time(route_name, tw_time, schedules)
+            matched_dt, matched_str = _find_closest_schedule_time(route_name, tw_time, schedules, direction="closest")
             transitions.append({
                 "type": "收班 (End)",
                 "gps_time": tw_time,
@@ -680,15 +736,24 @@ async def generate_bus_plan(plate_number: str, date: str):
         
         prev_operating = curr_operating
 
-    ongoing_trip = None
+    # 處理最後一筆 GPS 資料如果是營運中，補上 "收班 (End)"，採用 direction="after" (收班時間後推)
     if prev_operating and len(gps_data) > 0:
-        last_start = None
-        for t in reversed(transitions):
-            if t["type"] == "開班 (Start)":
-                last_start = t
-                break
-        if last_start:
-            ongoing_trip = last_start
+        last_row = gps_data[-1]
+        last_tw_time = last_row["recorded_at_tw"]
+        last_route = last_row.get("route_name", "")
+        matched_dt, matched_str = _find_closest_schedule_time(last_route, last_tw_time, schedules, direction="after")
+        transitions.append({
+            "type": "收班 (End)",
+            "gps_time": last_tw_time,
+            "route": last_route,
+            "matched_time": matched_str or last_tw_time.strftime("%H:%M"),
+            "matched_dt": matched_dt or last_tw_time,
+            "lat": last_row.get("lat"),
+            "lon": last_row.get("lon")
+        })
+        prev_operating = False
+
+    ongoing_trip = None
 
     # 組合成 Trips
     trips = []
