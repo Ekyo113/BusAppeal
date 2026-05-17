@@ -662,7 +662,9 @@ async def generate_bus_plan(plate_number: str, date: str):
                 "gps_time": tw_time,
                 "route": route_name,
                 "matched_time": matched_str or tw_time.strftime("%H:%M"),
-                "matched_dt": matched_dt or tw_time
+                "matched_dt": matched_dt or tw_time,
+                "lat": row.get("lat"),
+                "lon": row.get("lon")
             })
         elif prev_operating and not curr_operating:
             matched_dt, matched_str = _find_closest_schedule_time(route_name, tw_time, schedules)
@@ -671,7 +673,9 @@ async def generate_bus_plan(plate_number: str, date: str):
                 "gps_time": tw_time,
                 "route": route_name,
                 "matched_time": matched_str or tw_time.strftime("%H:%M"),
-                "matched_dt": matched_dt or tw_time
+                "matched_dt": matched_dt or tw_time,
+                "lat": row.get("lat"),
+                "lon": row.get("lon")
             })
         
         prev_operating = curr_operating
@@ -737,7 +741,9 @@ async def generate_bus_plan(plate_number: str, date: str):
                     "start_time": prev_trip["end"]["matched_time"],
                     "end_time": next_trip["start"]["matched_time"],
                     "location": "場站/路邊",
-                    "duration_mins": duration_mins
+                    "duration_mins": duration_mins,
+                    "lat": prev_trip["end"].get("lat"),
+                    "lon": prev_trip["end"].get("lon")
                 })
 
     if trips and trips[-1]["end"] and ongoing_trip:
@@ -749,7 +755,9 @@ async def generate_bus_plan(plate_number: str, date: str):
                 "start_time": trips[-1]["end"]["matched_time"],
                 "end_time": ongoing_trip["matched_time"],
                 "location": "場站/路邊",
-                "duration_mins": duration_mins
+                "duration_mins": duration_mins,
+                "lat": trips[-1]["end"].get("lat"),
+                "lon": trips[-1]["end"].get("lon")
             })
 
     # 組成 route_summary
@@ -757,6 +765,20 @@ async def generate_bus_plan(plate_number: str, date: str):
     for r_detail in route_details:
         summary_routes.append(r_detail["route"])
     route_summary = " -> ".join(summary_routes) if summary_routes else "無營運路線"
+
+    # 6. 加入 GPS最後位置到 route_details (供前端獨立顯示最後紀錄位置)
+    if gps_data:
+        last_gps = gps_data[-1]
+        try:
+            last_time_str = last_gps["recorded_at_tw"].strftime("%H:%M:%S")
+            route_details.append({
+                "is_last_gps": True,
+                "lat": float(last_gps.get("lat")) if last_gps.get("lat") is not None else None,
+                "lon": float(last_gps.get("lon")) if last_gps.get("lon") is not None else None,
+                "time": last_time_str
+            })
+        except Exception as e:
+            print(f"[BusService] Failed to append last_gps to route_details: {e}")
 
     plan_data = {
         "plate_number": plate_number,

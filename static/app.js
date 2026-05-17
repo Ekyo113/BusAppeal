@@ -608,6 +608,9 @@ function renderPlans(plans) {
     `;
 
     plans.forEach((plan, index) => {
+        const lastGps = (plan.route_details || []).find(r => r.is_last_gps);
+        const routesOnly = (plan.route_details || []).filter(r => !r.is_last_gps);
+
         html += `
             <tr>
                 <td>${plan.date}</td>
@@ -626,7 +629,7 @@ function renderPlans(plans) {
                             <div class="details-section">
                                 <h4>🚌 路線行程</h4>
                                 <div class="timeline">
-                                    ${(plan.route_details || []).map(r => `
+                                    ${routesOnly.map(r => `
                                         <div class="timeline-item">
                                             <span class="time">${r.start_time} - ${r.end_time}</span>
                                             <span class="desc">${r.route}</span>
@@ -637,15 +640,29 @@ function renderPlans(plans) {
                             <div class="details-section">
                                 <h4>⏸️ 中退紀錄</h4>
                                 <div class="timeline timeline-break">
-                                    ${(plan.break_details || []).map(b => `
-                                        <div class="timeline-item">
-                                            <span class="time">${b.start_time} - ${b.end_time}</span>
-                                            <span class="desc">${b.location}</span>
-                                        </div>
-                                    `).join('') || '無資料'}
+                                    ${(plan.break_details || []).map(b => {
+                                        const locText = b.lat && b.lon ? `<a href="https://www.google.com/maps?q=${b.lat},${b.lon}" target="_blank" style="color: #38bdf8; text-decoration: underline;">場站/路邊 (${b.lat.toFixed(4)}, ${b.lon.toFixed(4)})</a>` : b.location;
+                                        return `
+                                            <div class="timeline-item">
+                                                <span class="time">${b.start_time} - ${b.end_time}</span>
+                                                <span class="desc">${locText}</span>
+                                            </div>
+                                        `;
+                                    }).join('') || '無資料'}
                                 </div>
                             </div>
                         </div>
+                        ${lastGps ? `
+                            <div class="plan-last-gps" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px dashed #334155;">
+                                <label style="font-size: 0.75rem; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">📍 GPS 當日紀錄最後位置</label>
+                                <p style="margin: 0.25rem 0 0 0; font-size: 0.95rem; color: #f8fafc; font-family: monospace;">
+                                    <a href="https://www.google.com/maps?q=${lastGps.lat},${lastGps.lon}" target="_blank" style="color: #38bdf8; text-decoration: underline;">
+                                        ${lastGps.lat.toFixed(6)}, ${lastGps.lon.toFixed(6)}
+                                    </a>
+                                    <span style="color: #94a3b8; font-size: 0.85rem; margin-left: 0.5rem;">(${lastGps.time})</span>
+                                </p>
+                            </div>
+                        ` : ''}
                     </div>
                 </td>
             </tr>
@@ -695,16 +712,33 @@ function renderPlans(plans) {
         const card = document.createElement('div');
         card.className = 'plan-card';
         
-        const breakHtml = (plan.break_details || []).map(b => `
-            <div class="break-item">
-                <span>⏱️ ${b.start_time} - ${b.end_time}</span>
-                <span>📍 ${b.location}</span>
-            </div>
-        `).join('') || '<p>無中退紀錄</p>';
+        const breakHtml = (plan.break_details || []).map(b => {
+            const locText = b.lat && b.lon ? `<a href="https://www.google.com/maps?q=${b.lat},${b.lon}" target="_blank" style="color: #38bdf8; text-decoration: underline;">場站/路邊 (${b.lat.toFixed(4)}, ${b.lon.toFixed(4)})</a>` : b.location;
+            return `
+                <div class="break-item">
+                    <span>⏱️ ${b.start_time} - ${b.end_time}</span>
+                    <span>📍 ${locText}</span>
+                </div>
+            `;
+        }).join('') || '<p>無中退紀錄</p>';
 
-        const routeHtml = (plan.route_details || []).map(r => `
+        const routesOnly = (plan.route_details || []).filter(r => !r.is_last_gps);
+        const routeHtml = routesOnly.map(r => `
             <li>${r.start_time}-${r.end_time}: <strong>${r.route}</strong></li>
         `).join('') || '<li>無詳細路線資料</li>';
+
+        const lastGps = (plan.route_details || []).find(r => r.is_last_gps);
+        const lastGpsHtml = lastGps ? `
+            <div class="plan-last-gps" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px dashed #334155; display: flex; flex-direction: column; gap: 0.25rem;">
+                <label style="font-size: 0.75rem; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">📍 GPS 當日紀錄最後位置</label>
+                <p style="margin: 0; font-size: 0.95rem; color: #f8fafc; font-family: monospace;">
+                    <a href="https://www.google.com/maps?q=${lastGps.lat},${lastGps.lon}" target="_blank" style="color: #38bdf8; text-decoration: underline;">
+                        ${lastGps.lat.toFixed(6)}, ${lastGps.lon.toFixed(6)}
+                    </a>
+                    <span style="color: #94a3b8; font-size: 0.85rem; margin-left: 0.5rem;">(${lastGps.time})</span>
+                </p>
+            </div>
+        ` : '';
 
         card.innerHTML = `
             <div class="plan-card-header">
@@ -730,6 +764,7 @@ function renderPlans(plans) {
                         ${breakHtml}
                     </div>
                 </div>
+                ${lastGpsHtml}
             </div>
         `;
         container.appendChild(card);
