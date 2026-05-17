@@ -15,9 +15,9 @@ def collect_weekly_bus_data():
     tz = pytz.timezone('Asia/Taipei')
     now = datetime.now(tz)
     
-    # Only record between 2026-05-08 and 2026-05-17 23:30
+    # Only record between 2026-05-08 and 2026-05-20 23:30
     start_date = datetime(2026, 5, 8, tzinfo=tz)
-    end_date = datetime(2026, 5, 17, 23, 30, 0, tzinfo=tz)
+    end_date = datetime(2026, 5, 20, 23, 30, 0, tzinfo=tz)
     
     if not (start_date <= now <= end_date):
         return
@@ -27,8 +27,8 @@ def collect_weekly_bus_data():
     if (5 * 60 + 30) <= minutes <= (23 * 60):
         try:
             from database import Database
-            # 排程：5/15 台南, 5/16 高雄, 5/17 台南
-            if now.month == 5 and now.day in [15, 17]:
+            # 排程：5/15 台南, 5/16 高雄, 5/17~5/20 台南
+            if now.month == 5 and now.day in [15, 17, 18, 19, 20]:
                 target_city = "Tainan"
             else:
                 target_city = "Kaohsiung"
@@ -52,7 +52,7 @@ def collect_weekly_bus_data():
             if records:
                 client = Database.get_client()
                 client.table("weekly_bus_gps_log").insert(records).execute()
-                print(f"[WeeklyBusData] Inserted {len(records)} Kaohsiung bus GPS records.")
+                print(f"[WeeklyBusData] Inserted {len(records)} {target_city} bus GPS records.")
 
         except Exception as e:
             import traceback
