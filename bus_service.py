@@ -15,6 +15,7 @@ import time
 import httpx
 from datetime import datetime, timezone, timedelta
 from typing import Optional
+from dateutil.parser import parse as parse_date
 import gc
 from database import Database
 from config import Config
@@ -127,7 +128,9 @@ def _check_stall(city_code: str, plate: str,
     if dist < STALL_THRESHOLD_METERS:
         # 計算靜止秒數
         try:
-            oldest_dt = datetime.fromisoformat(oldest["recorded_at"].replace("Z", "+00:00"))
+            oldest_dt = parse_date(oldest["recorded_at"])
+            if oldest_dt.tzinfo is None:
+                oldest_dt = oldest_dt.replace(tzinfo=timezone.utc)
             stalled_sec = int((datetime.now(timezone.utc) - oldest_dt).total_seconds())
         except Exception:
             stalled_sec = STALL_WINDOW_RECORDS * 30
@@ -578,10 +581,10 @@ async def generate_bus_plan(plate_number: str, date: str):
     gps_data = []
     for row in gps_res.data:
         try:
-            ts = row["recorded_at"].replace(" ", "T")
-            if "+" in ts:
-                ts = ts.split("+")[0] + "Z"
-            utc_dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            # 使用更強固的 dateutil.parser.parse，完美處理任何微秒位數 (如 5 位數等)
+            utc_dt = parse_date(row["recorded_at"])
+            if utc_dt.tzinfo is not None:
+                utc_dt = utc_dt.astimezone(timezone.utc).replace(tzinfo=None)
             tw_dt = utc_dt + timedelta(hours=8)
             row["recorded_at_tw"] = tw_dt
             gps_data.append(row)
