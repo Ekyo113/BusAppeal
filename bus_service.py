@@ -592,6 +592,28 @@ async def generate_bus_plan(plate_number: str, date: str):
         print(f"[BusService] No GPS logs found for {plate_number} on {date}")
         return None
 
+    # [規則 1] 當日 gps 少於 15 筆不列入計算
+    if len(gps_data) < 15:
+        print(f"[BusService] Plate {plate_number} on {date} skipped: only {len(gps_data)} GPS records (min 15 required)")
+        try:
+            client.table("bus_operating_plans").delete().eq("plate_number", plate_number).eq("date", date).execute()
+        except Exception as e:
+            print(f"[BusService] Failed to clean up excluded plan for {plate_number} on {date}: {e}")
+        return None
+
+    # [規則 2] 當日 gps 時間最晚 - 最早少於 6 小時不列入計算
+    earliest_time = gps_data[0]["recorded_at_tw"]
+    latest_time = gps_data[-1]["recorded_at_tw"]
+    span_seconds = (latest_time - earliest_time).total_seconds()
+    span_hours = span_seconds / 3600.0
+    if span_hours < 6.0:
+        print(f"[BusService] Plate {plate_number} on {date} skipped: GPS span is {span_hours:.2f} hours (min 6.0 hours required)")
+        try:
+            client.table("bus_operating_plans").delete().eq("plate_number", plate_number).eq("date", date).execute()
+        except Exception as e:
+            print(f"[BusService] Failed to clean up excluded plan for {plate_number} on {date}: {e}")
+        return None
+
     # 2. 篩選「原地中退」點 (與上一點位置差異極小)
     filtered_gps = []
     stationary_count = 0
