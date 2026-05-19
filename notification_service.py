@@ -7,6 +7,7 @@ from linebot.v3.messaging import (
 )
 from config import Config
 from database import Database
+from utils import mask_id
 
 class NotificationService:
     @staticmethod
@@ -39,6 +40,6 @@ class NotificationService:
                             messages=[TextMessage(text=driver_msg)]
                         ))
                     except Exception as e:
-                        print(f"Notify Driver {driver_line_id} failed: {e}")
+                        print(f"Notify Driver {mask_id(driver_line_id)} failed: {e}")
         except Exception as e:
             print(f"NotificationService Error: {e}")

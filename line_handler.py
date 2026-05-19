@@ -26,6 +26,7 @@ from config import Config
 from database import Database
 from ai_service import AIService
 from notification_service import NotificationService
+from utils import mask_id
 import uuid
 import asyncio
 import json
@@ -57,7 +58,7 @@ async def handle_text_message(event):
     # Debug: Output source ID (User, Group, or Room) to logs for easy configuration
     source_type = event.source.type
     source_id = getattr(event.source, "group_id", getattr(event.source, "room_id", user_id))
-    print(f"DEBUG: Message source type: {source_type}, source ID: {source_id}")
+    print(f"DEBUG: Message source type: {source_type}, source ID: {mask_id(source_id)}")
 
     # ── 管理群訊息處理 ──
     admin_group_ids = [gid.strip() for gid in (Config.LINE_RECEIVE_ID or "").split(",") if gid.strip()]
@@ -71,7 +72,7 @@ async def handle_text_message(event):
         return
 
     # Get current state
-    print(f"DEBUG: Fetching state for {user_id}...")
+    print(f"DEBUG: Fetching state for {mask_id(user_id)}...")
     state_data = Database.get_user_state(user_id)
     step = state_data["step"] if state_data else "START"
     print(f"DEBUG: Current step: {step}")
@@ -412,7 +413,7 @@ async def handle_content_message(event):
         # Debug: Output source ID (User or Group) to logs
         source_type = event.source.type
         source_id = getattr(event.source, "group_id", getattr(event.source, "room_id", user_id))
-        print(f"DEBUG: Media from {display_name} ({user_id}). Source type: {source_type}")
+        print(f"DEBUG: Media from {display_name} ({mask_id(user_id)}). Source type: {source_type}")
 
     # [NEW] Check if this is a private chat. If not, don't trigger the flow.
     if source_type != "user":
@@ -468,17 +469,17 @@ async def save_and_notify(user_id, temp_data, line_bot_api, reply_token):
     
     # 1. Fetch dynamic vendor group IDs based on exact car number match
     vendor_ids = Database.get_vendor_groups(car_number)
-    print(f"DEBUG Routing: Car {car_number} matched vendor groups: {vendor_ids}")
+    print(f"DEBUG Routing: Car {car_number} matched vendor groups: {[mask_id(vid) for vid in vendor_ids]}")
 
     # 2. Get default Admin/Receiver IDs from config
     receive_ids = [id.strip() for id in (Config.LINE_RECEIVE_ID or "").split(",") if id.strip()]
     
     # 3. Merge all targets (Set to ensure uniqueness)
     all_targets = list(set(receive_ids + vendor_ids))
-    print(f"DEBUG Routing: Final push target IDs: {all_targets}")
+    print(f"DEBUG Routing: Final push target IDs: {[mask_id(tid) for tid in all_targets]}")
 
     for target_id in all_targets:
         try:
             await line_bot_api.push_message(PushMessageRequest(to=target_id, messages=[TextMessage(text=msg)]))
         except Exception as e:
-            print(f"Push notification to {target_id} failed: {e}")
+            print(f"Push notification to {mask_id(target_id)} failed: {e}")
