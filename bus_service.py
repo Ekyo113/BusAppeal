@@ -29,6 +29,7 @@ from ai_service import AIService
 
 _tdx_token: Optional[str] = None
 _tdx_token_expiry: float = 0.0  # Unix timestamp (秒)
+_status_cache: dict = {}  # {city_code: {"data": payload, "cached_at": datetime}}
 
 TDX_AUTH_URL = "https://tdx.transportdata.tw/auth/realms/TDXConnect/protocol/openid-connect/token"
 TDX_BASE_URL = "https://tdx.transportdata.tw/api/basic"
@@ -177,11 +178,23 @@ def cleanup_old_gps_history():
 # 主要資料拉取與整合
 # ─────────────────────────────────────────
 
-def fetch_bus_status(city_code: str, force_a2: bool = False) -> dict:
+def fetch_bus_status(city_code: str, force_a2: bool = False, bypass_cache: bool = False) -> dict:
     """
     整合 TDX 即時公車動態 + Supabase 品情通報，
     回傳該城市所有受監控車輛的狀態清單。
     """
+    global _status_cache
+    now_dt = datetime.now(timezone.utc)
+
+    # 檢查記憶體快取 (在非強刷且 10 分鐘內時)
+    if not bypass_cache and not force_a2 and city_code in _status_cache:
+        cache_entry = _status_cache[city_code]
+        elapsed = (now_dt - cache_entry["cached_at"]).total_seconds()
+        if elapsed < 600:
+            res_data = cache_entry["data"].copy()
+            res_data["cache_remaining_seconds"] = max(0, int(600 - elapsed))
+            return res_data
+
     client = Database.get_client()
 
     # 1. 取得受監控車輛清單
@@ -196,7 +209,7 @@ def fetch_bus_status(city_code: str, force_a2: bool = False) -> dict:
     monitored_plates = {row["plate_number"]: row for row in monitored_rows}
 
     if not monitored_plates:
-        return {"city_code": city_code, "updated_at": _now_iso(), "buses": []}
+        return {"city_code": city_code, "updated_at": _now_iso(), "buses": [], "cache_remaining_seconds": 600}
 
     # 2. 取得未處理品情通報（依車牌 index）
     reports_rows = (
@@ -355,11 +368,21 @@ def fetch_bus_status(city_code: str, force_a2: bool = False) -> dict:
         except Exception as e:
             print(f"[BusService] Failed to upsert last GPS: {e}")
 
-    return {
+    res_payload = {
         "city_code":  city_code,
         "updated_at": _now_iso(),
         "buses":      buses,
     }
+
+    # 更新記憶體快取
+    _status_cache[city_code] = {
+        "data": res_payload,
+        "cached_at": now_dt
+    }
+
+    res_payload_with_time = res_payload.copy()
+    res_payload_with_time["cache_remaining_seconds"] = 600
+    return res_payload_with_time
 
 
 def _fetch_tdx_realtime(city_code: str) -> list[dict]:
@@ -962,3 +985,10 @@ def fetch_cities() -> list[dict]:
 def _now_iso() -> str:
     tz_taipei = timezone(timedelta(hours=8))
     return datetime.now(tz_taipei).isoformat()
+
+
+def clear_bus_status_cache():
+    """手動清除公車狀態的記憶體快取（例如在品情通報變更時）。"""
+    global _status_cache
+    _status_cache.clear()
+    print("[BusService] Bus status memory cache has been cleared.")

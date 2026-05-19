@@ -33,7 +33,7 @@ def collect_weekly_bus_data():
             else:
                 target_city = "Kaohsiung"
             
-            data = bus_service.fetch_bus_status(target_city, force_a2=False)
+            data = bus_service.fetch_bus_status(target_city, force_a2=False, bypass_cache=True)
             buses = data.get("buses", [])
             
             records = []
@@ -137,15 +137,15 @@ async def get_cities(x_map_password: str = Header(None)):
 
 
 @app.get("/bus/status")
-async def get_bus_status(city: str = "Kaohsiung", force_a2: bool = False, x_map_password: str = Header(None)):
+async def get_bus_status(city: str = "Kaohsiung", force_a2: bool = False, bypass_cache: bool = False, x_map_password: str = Header(None)):
     """
     取得指定城市所有受監控公車的整合狀態。
-    Query param: ?city=Kaohsiung | Tainan | ... & force_a2=true
+    Query param: ?city=Kaohsiung | Tainan | ... & force_a2=true & bypass_cache=true
     """
     if not Config.MAP_PASSWORD or x_map_password != Config.MAP_PASSWORD:
         raise HTTPException(status_code=401, detail="Unauthorized")
     try:
-        return bus_service.fetch_bus_status(city, force_a2)
+        return bus_service.fetch_bus_status(city, force_a2, bypass_cache)
     except Exception as e:
         import traceback
         traceback.print_exc()

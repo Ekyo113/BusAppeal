@@ -48,7 +48,13 @@ class Database:
             "created_at": datetime.utcnow().isoformat(),
             "updated_at": datetime.utcnow().isoformat()
         }
-        return client.table("reports").insert(report).execute()
+        res = client.table("reports").insert(report).execute()
+        try:
+            import bus_service
+            bus_service.clear_bus_status_cache()
+        except Exception as e:
+            print(f"[Database] Failed to clear status cache: {e}")
+        return res
 
     @classmethod
     def get_vendor_groups(cls, car_number: str) -> list:
@@ -80,7 +86,13 @@ class Database:
     @classmethod
     def delete_report(cls, report_id: str):
         client = cls.get_client()
-        return client.table("reports").delete().eq("id", report_id).execute()
+        res = client.table("reports").delete().eq("id", report_id).execute()
+        try:
+            import bus_service
+            bus_service.clear_bus_status_cache()
+        except Exception as e:
+            print(f"[Database] Failed to clear status cache: {e}")
+        return res
 
     @classmethod
     def update_report_status(cls, report_id: str, status: str, mileage: str = None):
@@ -95,7 +107,13 @@ class Database:
             if mileage:
                 update_data["mileage"] = mileage
                 
-        return client.table("reports").update(update_data).eq("id", report_id).execute()
+        res = client.table("reports").update(update_data).eq("id", report_id).execute()
+        try:
+            import bus_service
+            bus_service.clear_bus_status_cache()
+        except Exception as e:
+            print(f"[Database] Failed to clear status cache: {e}")
+        return res
 
     @classmethod
     def get_pending_reports_by_car(cls, car_number: str) -> list:
@@ -135,7 +153,13 @@ class Database:
         if solution_type:
             update_data["solution_type"] = solution_type
 
-        return client.table("reports").update(update_data).eq("id", report_id).execute()
+        res = client.table("reports").update(update_data).eq("id", report_id).execute()
+        try:
+            import bus_service
+            bus_service.clear_bus_status_cache()
+        except Exception as e:
+            print(f"[Database] Failed to clear status cache: {e}")
+        return res
 
     @classmethod
     def create_completed_report_from_group(
@@ -163,7 +187,13 @@ class Database:
             report["mileage"] = mileage
         if handler_id:
             report["handler_id"] = handler_id
-        return client.table("reports").insert(report).execute()
+        res = client.table("reports").insert(report).execute()
+        try:
+            import bus_service
+            bus_service.clear_bus_status_cache()
+        except Exception as e:
+            print(f"[Database] Failed to clear status cache: {e}")
+        return res
 
     @classmethod
     def get_bus_vendors(cls):
