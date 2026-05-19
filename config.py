@@ -22,7 +22,7 @@ class Config:
     TDX_CLIENT_SECRET = os.getenv("TDX_CLIENT_SECRET")
     
     # Admin settings
-    ADMIN_SECRET_KEY = os.getenv("ADMIN_SECRET_KEY", "default_secret_key")
+    ADMIN_SECRET_KEY = os.getenv("ADMIN_SECRET_KEY")
     MAP_PASSWORD = os.getenv("MAP_PASSWORD", "")
     
     @classmethod
@@ -32,7 +32,8 @@ class Config:
             "LINE_CHANNEL_ACCESS_TOKEN", 
             "LINE_NOTIFY_ID",
             "SUPABASE_URL",
-            "SUPABASE_SERVICE_KEY"
+            "SUPABASE_SERVICE_KEY",
+            "ADMIN_SECRET_KEY"
         ]
         missing = [f for f in required if not getattr(cls, f)]
         if missing:

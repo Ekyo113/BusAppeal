@@ -18,6 +18,10 @@ import bus_service
 
 router = APIRouter(prefix="/admin")
 
+# Concurrency flags to prevent multiple overlapping heavy jobs (B-04)
+is_syncing = False
+is_analyzing = False
+
 @router.get("/weekly_gps_log")
 async def get_weekly_gps_log(date: str = None, token: str = Header(None)):
     verify_token(token)
@@ -41,7 +45,7 @@ async def get_weekly_gps_log(date: str = None, token: str = Header(None)):
     return response.data
 
 def verify_token(token: str):
-    if token != Config.ADMIN_SECRET_KEY:
+    if not Config.ADMIN_SECRET_KEY or token != Config.ADMIN_SECRET_KEY:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 @router.get("/reports")
@@ -129,82 +133,103 @@ async def get_bus_plates(token: str = Header(None)):
 
 @router.post("/bus_plans/sync_schedules")
 async def sync_schedules(city: str = "Kaohsiung", token: str = Header(None)):
+    global is_syncing
     verify_token(token)
-    count = bus_service.sync_route_schedules(city)
-    return {"status": "success", "count": count}
+    if is_syncing:
+        raise HTTPException(status_code=429, detail="同步時刻表任務正在進行中，請稍後再試。")
+    is_syncing = True
+    try:
+        count = bus_service.sync_route_schedules(city)
+        return {"status": "success", "count": count}
+    finally:
+        is_syncing = False
 
 @router.post("/bus_plans/analyze_selected")
 async def analyze_selected_vehicle(plate_number: str = Body(..., embed=True), token: str = Header(None)):
+    global is_analyzing
     verify_token(token)
-    client = Database.get_client()
-    
-    # 1. 找出該車號的所有日期
-    res = client.table("weekly_bus_gps_log")\
-        .select("recorded_at")\
-        .eq("plate_number", plate_number)\
-        .execute()
-    
-    unique_dates = sorted(list(set(row["recorded_at"].split("T")[0] for row in res.data)), reverse=True)
-    
-    results = []
-    for date in unique_dates:
-        # 檢查是否已分析過
-        existing = client.table("bus_operating_plans")\
-            .select("id")\
+    if is_analyzing:
+        raise HTTPException(status_code=429, detail="AI 分析任務正在進行中，請稍後再試。")
+    is_analyzing = True
+    try:
+        client = Database.get_client()
+        
+        # 1. 找出該車號的所有日期
+        res = client.table("weekly_bus_gps_log")\
+            .select("recorded_at")\
             .eq("plate_number", plate_number)\
-            .eq("date", date)\
-            .limit(1)\
             .execute()
         
-        if existing.data:
-            continue
+        unique_dates = sorted(list(set(row["recorded_at"].split("T")[0] for row in res.data)), reverse=True)
+        
+        results = []
+        for date in unique_dates:
+            # 檢查是否已分析過
+            existing = client.table("bus_operating_plans")\
+                .select("id")\
+                .eq("plate_number", plate_number)\
+                .eq("date", date)\
+                .limit(1)\
+                .execute()
             
-        plan = await bus_service.generate_bus_plan(plate_number, date)
-        if plan:
-            results.append(plan)
-            await asyncio.sleep(15)
-            
-    return {"status": "success", "analyzed_count": len(results)}
+            if existing.data:
+                continue
+                
+            plan = await bus_service.generate_bus_plan(plate_number, date)
+            if plan:
+                results.append(plan)
+                await asyncio.sleep(15)
+                
+        return {"status": "success", "analyzed_count": len(results)}
+    finally:
+        is_analyzing = False
 
 @router.post("/bus_plans/analyze_all")
 async def analyze_all_logs(token: str = Header(None)):
+    global is_analyzing
     verify_token(token)
-    client = Database.get_client()
-    
-    # 1. 找出所有已存在的方案，避免重複分析
-    existing_plans_res = client.table("bus_operating_plans").select("plate_number, date").execute()
-    existing_pairs = set()
-    for row in existing_plans_res.data:
-        existing_pairs.add((row["plate_number"], row["date"]))
-
-    # 2. 找出所有有 GPS 紀錄的車號與日期 (僅抓取最近 30 天，且只取必要欄位)
-    res = client.table("weekly_bus_gps_log")\
-        .select("plate_number, recorded_at")\
-        .execute()
-    
-    unique_pairs = set()
-    for row in res.data:
-        date = row["recorded_at"].split("T")[0]
-        plate = row["plate_number"]
+    if is_analyzing:
+        raise HTTPException(status_code=429, detail="AI 分析任務正在進行中，請稍後再試。")
+    is_analyzing = True
+    try:
+        client = Database.get_client()
         
-        # [測試模式] 目前僅分析 EAA-779
-        if plate != "EAA-779":
-            continue
-            
-        pair = (plate, date)
-        if pair not in existing_pairs:
-            unique_pairs.add(pair)
-    
-    if not unique_pairs:
-        return {"status": "success", "message": "所有數據皆已分析完成，無須重複分析。", "analyzed_count": 0}
+        # 1. 找出所有已存在的方案，避免重複分析
+        existing_plans_res = client.table("bus_operating_plans").select("plate_number, date").execute()
+        existing_pairs = set()
+        for row in existing_plans_res.data:
+            existing_pairs.add((row["plate_number"], row["date"]))
 
-    results = []
-    for plate, date in unique_pairs:
-        plan = await bus_service.generate_bus_plan(plate, date)
-        if plan:
-            results.append(plan)
+        # 2. 找出所有有 GPS 紀錄的車號與日期 (僅抓取最近 30 天，且只取必要欄位)
+        res = client.table("weekly_bus_gps_log")\
+            .select("plate_number, recorded_at")\
+            .execute()
+        
+        unique_pairs = set()
+        for row in res.data:
+            date = row["recorded_at"].split("T")[0]
+            plate = row["plate_number"]
             
-        # 配額保護：每 15 秒呼叫一次 (避免頻繁觸發 429)
-        await asyncio.sleep(15)
-            
-    return {"status": "success", "analyzed_count": len(results)}
+            # [測試模式] 目前僅分析 EAA-779
+            if plate != "EAA-779":
+                continue
+                
+            pair = (plate, date)
+            if pair not in existing_pairs:
+                unique_pairs.add(pair)
+        
+        if not unique_pairs:
+            return {"status": "success", "message": "所有數據皆已分析完成，無須重複分析。", "analyzed_count": 0}
+
+        results = []
+        for plate, date in unique_pairs:
+            plan = await bus_service.generate_bus_plan(plate, date)
+            if plan:
+                results.append(plan)
+                
+            # 配額保護：每 15 秒呼叫一次 (避免頻繁觸發 429)
+            await asyncio.sleep(15)
+                
+        return {"status": "success", "analyzed_count": len(results)}
+    finally:
+        is_analyzing = False

@@ -84,6 +84,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 app.include_router(admin_router)
 
 print("==> Application initializing...")
+Config.validate()
 
 # ─────────────────────────────────────────
 # 基本路由
@@ -126,7 +127,7 @@ async def admin_page():
 @app.get("/bus/cities")
 async def get_cities(x_map_password: str = Header(None)):
     """回傳所有啟用城市清單，供前端下拉選單使用。"""
-    if Config.MAP_PASSWORD and x_map_password != Config.MAP_PASSWORD:
+    if not Config.MAP_PASSWORD or x_map_password != Config.MAP_PASSWORD:
         raise HTTPException(status_code=401, detail="Unauthorized")
     try:
         return bus_service.fetch_cities()
@@ -141,7 +142,7 @@ async def get_bus_status(city: str = "Kaohsiung", force_a2: bool = False, x_map_
     取得指定城市所有受監控公車的整合狀態。
     Query param: ?city=Kaohsiung | Tainan | ... & force_a2=true
     """
-    if Config.MAP_PASSWORD and x_map_password != Config.MAP_PASSWORD:
+    if not Config.MAP_PASSWORD or x_map_password != Config.MAP_PASSWORD:
         raise HTTPException(status_code=401, detail="Unauthorized")
     try:
         return bus_service.fetch_bus_status(city, force_a2)

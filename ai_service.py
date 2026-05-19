@@ -11,7 +11,7 @@ class AIService:
         if not key:
             print("AI Service Diagnostic: GEMINI_API_KEY is EMPTY or NOT FOUND!")
         else:
-            print(f"AI Service Diagnostic: Key starts with {key[:5]}... and ends with ...{key[-5:]}")
+            print("AI Service Diagnostic: GEMINI_API_KEY is successfully loaded.")
         
         genai.configure(api_key=key)
         # 改用 gemini-3.1-flash-lite
