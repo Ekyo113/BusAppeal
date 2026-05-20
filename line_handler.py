@@ -188,6 +188,7 @@ async def handle_group_message(event, sender_user_id: str, group_id: str, text: 
             mileage    = item.get("mileage", "").strip()
             solution   = item.get("solution", "").strip()
             sol_type   = item.get("solution_type", "維修").strip()
+            handler_name = item.get("handler_name", "").strip()
 
             if not car_number or not solution:
                 reply_lines.append(f"⚠️ 無法識別某筆資料，請重新確認。")
@@ -196,26 +197,29 @@ async def handle_group_message(event, sender_user_id: str, group_id: str, text: 
             pending = Database.get_pending_reports_by_car(car_number)
 
             if len(pending) == 0:
-                # 規則7：無待處理項目 → 直接新建已完成通報
+                # 規則7：無待處理項目 → 直接新建已完成通報，類型填入「設計修改」
+                sol_type = "設計修改"
                 new_report_res = Database.create_completed_report_from_group(
                     car_number=car_number, solution=solution, mileage=mileage,
-                    handler_id=sender_user_id, solution_type=sol_type
+                    handler_id=sender_user_id, handler_name=handler_name or "市場組",
+                    solution_type=sol_type
                 )
                 if new_report_res.data:
                     NotificationService.send_completion_notify(new_report_res.data[0]["id"])
                 
-                reply_lines.append(f"✅ {car_number}：已新增並完成（{sol_type}）\n   方案：{solution}" + (f"\n   里程：{mileage} km" if mileage else ""))
+                reply_lines.append(f"✅ {car_number}：已新增並完成（{sol_type}）\n   處理人：{handler_name or '市場組'}\n   方案：{solution}" + (f"\n   里程：{mileage} km" if mileage else ""))
 
             elif len(pending) == 1:
                 # 只有一筆 → 直接更新
                 rid = pending[0]["id"]
                 Database.update_report_solution(
                     report_id=rid, solution=solution, mileage=mileage,
-                    handler_id=sender_user_id, solution_type=sol_type
+                    handler_id=sender_user_id, handler_name=handler_name or "市場組",
+                    solution_type=sol_type
                 )
                 NotificationService.send_completion_notify(rid)
                 
-                reply_lines.append(f"✅ {car_number}：已完成（{sol_type}）\n   方案：{solution}" + (f"\n   里程：{mileage} km" if mileage else ""))
+                reply_lines.append(f"✅ {car_number}：已完成（{sol_type}）\n   處理人：{handler_name or '市場組'}\n   方案：{solution}" + (f"\n   里程：{mileage} km" if mileage else ""))
 
             else:
                 # 多筆 → 暫存，等用戶選擇
@@ -225,7 +229,8 @@ async def handle_group_message(event, sender_user_id: str, group_id: str, text: 
                     "solution": solution,
                     "solution_type": sol_type,
                     "pending": pending,
-                    "sender_user_id": sender_user_id
+                    "sender_user_id": sender_user_id,
+                    "handler_name": handler_name
                 })
 
         # 先回覆已完成的結果
@@ -318,11 +323,13 @@ async def handle_postback(event):
 
             chosen_report = choice["pending"][idx]
             rid = chosen_report["id"]
+            handler_name = choice.get("handler_name", "").strip()
             Database.update_report_solution(
                 report_id=rid,
                 solution=choice["solution"],
                 mileage=choice["mileage"],
                 handler_id=choice["sender_user_id"],
+                handler_name=handler_name or "市場組",
                 solution_type=choice["solution_type"]
             )
             NotificationService.send_completion_notify(rid)
@@ -331,7 +338,7 @@ async def handle_postback(event):
             sol_type = choice["solution_type"]
             mileage  = choice["mileage"]
             done_lines.append(
-                f"✅ {car}：已完成（{sol_type}）\n   方案：{sol}" + (f"\n   里程：{mileage} km" if mileage else "")
+                f"✅ {car}：已完成（{sol_type}）\n   處理人：{handler_name or '市場組'}\n   方案：{sol}" + (f"\n   里程：{mileage} km" if mileage else "")
             )
 
             if remaining:

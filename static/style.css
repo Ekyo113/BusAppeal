@@ -911,6 +911,29 @@ main {
     border: 1px solid rgba(245, 158, 11, 0.2);
 }
 
+.modal-body-content input,
+.modal-body-content textarea,
+.modal-body-content select {
+    width: 100%;
+    background: var(--surface-light);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.75rem;
+    color: white;
+    font-family: inherit;
+    font-size: 0.9rem;
+    margin-top: 0.25rem;
+    box-sizing: border-box;
+    transition: border-color 0.2s, background-color 0.2s;
+}
+.modal-body-content input:focus,
+.modal-body-content textarea:focus,
+.modal-body-content select:focus {
+    outline: none;
+    border-color: var(--primary);
+    background: rgba(255, 255, 255, 0.08);
+}
+
 @keyframes spin {
     to { transform: rotate(360deg); }
 }

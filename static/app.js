@@ -143,31 +143,45 @@ function viewDetail(id) {
     body.innerHTML = `
         <div class="modal-body-content">
             <div class="detail-header">
-                <h2 style="margin-bottom:1rem; color:var(--primary);">車號 # ${report.car_number}</h2>
+                <h2 style="margin-bottom:1rem; color:var(--primary);">編輯通報單 #${report.id.substring(0,8)}</h2>
                 <div style="margin-bottom:1.5rem; display:flex; gap:.5rem; align-items:center;">
                     <span class="status-label ${report.status === '待處理' ? 'pending' : report.status === '維修中' ? 'progress' : 'done'}">${report.status}</span>
-                    ${report.solution_type ? `<span class="sol-type-label ${report.solution_type === '更換' ? 'sol-replace' : 'sol-repair'}">${report.solution_type}</span>` : ''}
                 </div>
             </div>
             
-            <div class="detail-row">
-                <label>通報時間 / 完成時間</label>
-                <p>${new Date(report.created_at).toLocaleString('zh-TW')} / ${report.completed_at ? new Date(report.completed_at).toLocaleString('zh-TW') : '尚未完成'}</p>
+            <div class="detail-row" style="display: flex; gap: 1rem; margin-bottom: 1rem;">
+                <div style="flex: 1;">
+                    <label>車號</label>
+                    <input type="text" id="edit-car-number" value="${report.car_number || ''}">
+                </div>
+                <div style="flex: 1;">
+                    <label>類型</label>
+                    <select id="edit-solution-type">
+                        <option value="" ${!report.solution_type ? 'selected' : ''}>未選擇</option>
+                        <option value="維修" ${report.solution_type === '維修' ? 'selected' : ''}>維修</option>
+                        <option value="更換" ${report.solution_type === '更換' ? 'selected' : ''}>更換</option>
+                        <option value="設計修改" ${report.solution_type === '設計修改' ? 'selected' : ''}>設計修改</option>
+                    </select>
+                </div>
             </div>
             
-            <div class="detail-row">
-                <label>目前里程</label>
-                <p>${report.mileage ? report.mileage + ' KM' : '尚未填寫'}</p>
+            <div class="detail-row" style="display: flex; gap: 1rem; margin-bottom: 1rem;">
+                <div style="flex: 1;">
+                    <label>處理人員</label>
+                    <input type="text" id="edit-handler-name" value="${report.handler_name || ''}">
+                </div>
+                <div style="flex: 1;">
+                    <label>通報時間 / 完成時間</label>
+                    <p style="padding-top: 0.75rem; font-size: 0.85rem; color: var(--text-muted);">
+                        ${new Date(report.created_at).toLocaleString('zh-TW')} / <br>
+                        ${report.completed_at ? new Date(report.completed_at).toLocaleString('zh-TW') : '尚未完成'}
+                    </p>
+                </div>
             </div>
 
-            <div class="detail-row">
-                <label>處理人員</label>
-                <p>${report.handler_name || '尚未填寫'}</p>
-            </div>
-
-            <div class="detail-row">
+            <div class="detail-row" style="margin-bottom: 1rem;">
                 <label>問題描述</label>
-                <p>${report.description}</p>
+                <textarea id="edit-description" rows="3">${report.description || ''}</textarea>
             </div>
 
             ${mediaHtml}
@@ -184,30 +198,58 @@ function viewDetail(id) {
 
 async function saveSolution() {
     if (!currentReportId) return;
+    
+    const car_number = document.getElementById('edit-car-number').value.trim();
+    const description = document.getElementById('edit-description').value.trim();
+    const solution_type = document.getElementById('edit-solution-type').value;
+    const handler_name = document.getElementById('edit-handler-name').value.trim();
     const solution = document.getElementById('solution-input').value.trim();
     const mileage = document.getElementById('mileage-input').value.trim();
     
-    if (!solution) {
-        showToast("請輸入方案內容", "error");
+    if (!car_number) {
+        showToast("車號不能為空", "error");
+        return;
+    }
+    if (!description) {
+        showToast("問題描述不能為空", "error");
         return;
     }
 
     const token = document.getElementById('admin-token').value;
     try {
-        const response = await fetch(`/admin/reports/${currentReportId}/solution`, {
+        const response = await fetch(`/admin/reports/${currentReportId}`, {
             method: 'PATCH',
             headers: { 
                 'token': token,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ solution, mileage })
+            body: JSON.stringify({ 
+                car_number,
+                description,
+                solution_type,
+                handler_name,
+                solution,
+                mileage
+            })
         });
         if (response.ok) {
-            showToast("方案與里程已儲存");
-            // Update local data
-            allReports = allReports.map(r => r.id === currentReportId ? { ...r, solution, mileage } : r);
-            document.getElementById('solution-display').innerText = solution;
-            renderReports(); // Refresh table to show new mileage
+            showToast("修改已儲存");
+            const now = new Date().toISOString();
+            allReports = allReports.map(r => r.id === currentReportId ? { 
+                ...r, 
+                car_number, 
+                description, 
+                solution_type, 
+                handler_name, 
+                solution, 
+                mileage,
+                status: solution ? '已完成' : r.status,
+                completed_at: (solution && !r.completed_at) ? now : r.completed_at
+            } : r);
+            
+            renderReports(); // Refresh table
+            updateStats();   // Refresh stats in case status changed
+            closeModal();    // Close the modal
         } else {
             showToast("儲存失敗", "error");
         }

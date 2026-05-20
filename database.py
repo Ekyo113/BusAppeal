@@ -116,6 +116,28 @@ class Database:
         return res
 
     @classmethod
+    def update_report_fields(cls, report_id: str, fields: dict):
+        client = cls.get_client()
+        allowed_columns = {
+            "car_number", "description", "solution_type", "handler_name",
+            "solution", "mileage", "status"
+        }
+        update_data = {k: v for k, v in fields.items() if k in allowed_columns}
+        update_data["updated_at"] = datetime.utcnow().isoformat()
+        
+        if update_data.get("status") == "已完成":
+            update_data["completed_at"] = datetime.utcnow().isoformat()
+            
+        res = client.table("reports").update(update_data).eq("id", report_id).execute()
+        try:
+            import bus_service
+            bus_service.clear_bus_status_cache()
+        except Exception as e:
+            print(f"[Database] Failed to clear status cache: {e}")
+        return res
+
+
+    @classmethod
     def get_pending_reports_by_car(cls, car_number: str) -> list:
         """查詢指定車號的所有未完成通報（狀態不為「已完成」）"""
         client = cls.get_client()
@@ -172,7 +194,7 @@ class Database:
         now = datetime.utcnow().isoformat()
         report = {
             "car_number": car_number,
-            "description": f"[管理群直接完成] {solution}",
+            "description": solution,
             "ai_summary": solution[:20],
             "solution": solution,
             "solution_type": solution_type or "維修",
