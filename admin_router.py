@@ -131,6 +131,7 @@ class CustomExportRequest(BaseModel):
     ids: list[str]
     format: str
     content_field: str = "solution"
+    export_type: str = "report"
 
 @router.post("/export/custom")
 async def export_custom(req: CustomExportRequest, token: str = Header(None)):
@@ -155,7 +156,7 @@ async def export_custom(req: CustomExportRequest, token: str = Header(None)):
             headers={"Access-Control-Expose-Headers": "Content-Disposition", "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"}
         )
     else:
-        pdf_buffer = ExportService.generate_pdf(reports, 'report', req.content_field)
+        pdf_buffer = ExportService.generate_pdf(reports, req.export_type, req.content_field)
         
         # Get vendor name and month for PDF naming: "客運名稱+月份"
         vendors = list(set([r.get('vendor_name') for r in reports if r.get('vendor_name')]))

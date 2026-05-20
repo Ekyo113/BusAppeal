@@ -35,6 +35,21 @@ async function loadReports() {
 
         allReports = await response.json();
         
+        // Also fetch monitored buses
+        try {
+            const busesRes = await fetch('/admin/monitored_buses', {
+                headers: { 'token': token }
+            });
+            if (busesRes.ok) {
+                monitoredBuses = await busesRes.json();
+            }
+        } catch (e) {
+            console.error("Failed to load monitored buses at startup:", e);
+        }
+
+        // Restore type filter checkbox states from localStorage
+        restoreTypeFilterState();
+        
         // Success: Hide login, show dashboard
         loginOverlay.classList.add('hidden');
         dashboardContent.classList.remove('hidden');
@@ -54,16 +69,48 @@ function toggleHideDone() {
     renderReports();
 }
 
+function saveTypeFilterState() {
+    if (document.getElementById('filter-type-replace')) {
+        localStorage.setItem('report_type_filter_replace', document.getElementById('filter-type-replace').checked);
+        localStorage.setItem('report_type_filter_repair', document.getElementById('filter-type-repair').checked);
+        localStorage.setItem('report_type_filter_design', document.getElementById('filter-type-design').checked);
+        localStorage.setItem('report_type_filter_other', document.getElementById('filter-type-other').checked);
+    }
+}
+
+function restoreTypeFilterState() {
+    if (document.getElementById('filter-type-replace')) {
+        document.getElementById('filter-type-replace').checked = localStorage.getItem('report_type_filter_replace') !== 'false';
+        document.getElementById('filter-type-repair').checked = localStorage.getItem('report_type_filter_repair') !== 'false';
+        document.getElementById('filter-type-design').checked = localStorage.getItem('report_type_filter_design') !== 'false';
+        document.getElementById('filter-type-other').checked = localStorage.getItem('report_type_filter_other') !== 'false';
+    }
+}
+
 function renderReports() {
     const list = document.getElementById('report-list');
     list.innerHTML = '';
 
-    const filteredReports = hideDone 
-        ? allReports.filter(r => r.status !== '已完成')
-        : allReports;
+    const showReplace = document.getElementById('filter-type-replace') ? document.getElementById('filter-type-replace').checked : true;
+    const showRepair = document.getElementById('filter-type-repair') ? document.getElementById('filter-type-repair').checked : true;
+    const showDesign = document.getElementById('filter-type-design') ? document.getElementById('filter-type-design').checked : true;
+    const showOther = document.getElementById('filter-type-other') ? document.getElementById('filter-type-other').checked : true;
+
+    const filteredReports = allReports.filter(r => {
+        // Status filter
+        if (hideDone && r.status === '已完成') return false;
+        
+        // Type filter
+        const type = r.solution_type;
+        if (type === '更換') return showReplace;
+        if (type === '維修') return showRepair;
+        if (type === '設計修改') return showDesign;
+        if (!type || type.trim() === '') return showOther;
+        return true;
+    });
 
     if (filteredReports.length === 0) {
-        list.innerHTML = '<tr><td colspan="7" class="loading-state">目前尚無通報記錄。</td></tr>';
+        list.innerHTML = '<tr><td colspan="12" class="loading-state">目前無符合條件的通報記錄。</td></tr>';
         return;
     }
 
@@ -348,9 +395,12 @@ async function deleteReport(id) {
 }
 
 function updateStats() {
-    document.getElementById('count-pending').innerText = allReports.filter(r => r.status === '待處理').length;
-    document.getElementById('count-in-progress').innerText = allReports.filter(r => r.status === '維修中').length;
-    document.getElementById('count-done').innerText = allReports.filter(r => r.status === '已完成').length;
+    const countPendingEl = document.getElementById('count-pending');
+    if (countPendingEl) countPendingEl.innerText = allReports.filter(r => r.status === '待處理').length;
+    const countInProgressEl = document.getElementById('count-in-progress');
+    if (countInProgressEl) countInProgressEl.innerText = allReports.filter(r => r.status === '維修中').length;
+    const countDoneEl = document.getElementById('count-done');
+    if (countDoneEl) countDoneEl.innerText = allReports.filter(r => r.status === '已完成').length;
     
     // 同步更新統計分頁數據
     if (monitoredBuses && monitoredBuses.length > 0) {
@@ -626,30 +676,86 @@ async function doExport() {
         return;
     }
 
+    // Filter reports from allReports matching dates and status '已完成'
+    const targetReports = allReports.filter(r => {
+        if (r.status !== '已完成') return false;
+        if (!r.completed_at) return false;
+        const completedDate = r.completed_at.slice(0, 10);
+        if (completedDate < start || completedDate > end) return false;
+        if (type === 'replacement') {
+            return r.solution_type === '更換';
+        }
+        return true;
+    });
+
+    if (targetReports.length === 0) {
+        showToast("該日期範圍內無已完成紀錄", "error");
+        return;
+    }
+
     showToast("報表產生中，請稍候...", "success");
 
-    try {
-        const response = await fetch(`/admin/export?type=${type}&start=${start}&end=${end}`, {
-            headers: { 'token': token }
-        });
-
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || "導出失敗");
+    // Group by vendor and month
+    const groups = {};
+    targetReports.forEach(r => {
+        let vendor = '未知客運';
+        const car = (r.car_number || '').trim();
+        if (monitoredBuses && monitoredBuses.length > 0) {
+            const found = monitoredBuses.find(b => (b.plate_number || '').trim() === car);
+            if (found) {
+                vendor = found.vendor_name || '未知客運';
+            }
         }
+        r.vendor_name = vendor;
+        const month = r.completed_at ? r.completed_at.slice(0, 7) : '無日期';
+        const key = `${vendor}_${month}`;
+        if (!groups[key]) {
+            groups[key] = { vendor, month, ids: [] };
+        }
+        groups[key].ids.push(r.id);
+    });
 
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${type === 'report' ? '通報紀錄' : '換件紀錄'}_${start}_${end}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        showToast("下載成功", "success");
+    let successCount = 0;
+    for (const group of Object.values(groups)) {
+        try {
+            const response = await fetch('/admin/export/custom', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'token': token
+                },
+                body: JSON.stringify({
+                    ids: group.ids,
+                    format: 'pdf',
+                    export_type: type,
+                    content_field: 'solution'
+                })
+            });
+
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.detail || `匯出 ${group.vendor} PDF 失敗`);
+            }
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${group.vendor}_${group.month.replace('-', '年')}月.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+            successCount++;
+        } catch (e) {
+            console.error("Export Group Error:", e);
+            showToast(e.message, "error");
+        }
+    }
+
+    if (successCount > 0) {
+        showToast(`成功匯出 ${successCount} 個 PDF 檔案！`, "success");
         closeExportModal();
-    } catch (error) {
-        showToast(error.message, "error");
     }
 }
 
@@ -1523,7 +1629,15 @@ async function triggerCustomExport(format) {
         // Group by vendor and month
         const groups = {};
         targetReports.forEach(r => {
-            const vendor = r.vendor_name || '未知客運';
+            let vendor = '未知客運';
+            const car = (r.car_number || '').trim();
+            if (monitoredBuses && monitoredBuses.length > 0) {
+                const found = monitoredBuses.find(b => (b.plate_number || '').trim() === car);
+                if (found) {
+                    vendor = found.vendor_name || '未知客運';
+                }
+            }
+            r.vendor_name = vendor;
             const month = r.completed_at ? r.completed_at.slice(0, 7) : '無日期'; // YYYY-MM
             const key = `${vendor}_${month}`;
             if (!groups[key]) {

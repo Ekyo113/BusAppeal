@@ -34,6 +34,14 @@
                 </div>
             </div>
             <div class="user-actions">
+                <div class="header-stats" style="display: inline-flex; align-items: center; gap: 0.5rem; margin-right: 0.5rem;">
+                    <span class="header-stat pending" style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.8rem; color: #f87171; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2); padding: 0.2rem 0.4rem; border-radius: 6px; font-weight: 500;">
+                        🔴 待處理: <span id="count-pending">0</span>
+                    </span>
+                    <span class="header-stat done" style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.8rem; color: #34d399; background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.2); padding: 0.2rem 0.4rem; border-radius: 6px; font-weight: 500;">
+                        🟢 已完成: <span id="count-done">0</span>
+                    </span>
+                </div>
                 <select id="reports-sort-by" onchange="renderReports()" style="background: var(--surface-light); border: 1px solid var(--border); color: white; padding: 0.35rem 0.5rem; border-radius: 6px; font-size: 0.85rem; margin-right: 0.5rem; outline: none; cursor: pointer;">
                     <option value="created_at">排序：建立時間</option>
                     <option value="car_number">排序：車牌號碼</option>
@@ -58,27 +66,25 @@
         <main>
             <!-- Tab: Reports -->
             <div id="tab-reports" class="tab-content active">
-                <div class="dashboard-grid">
-                    <!-- Sidebar Stats -->
-                <aside class="stats-panel">
-                    <div class="stat-card" data-status="pending">
-                        <span class="label">待處理</span>
-                        <span class="value" id="count-pending">0</span>
-                    </div>
-                    <div class="stat-card" data-status="progress">
-                        <span class="label">維修中</span>
-                        <span class="value" id="count-in-progress">0</span>
-                    </div>
-                    <div class="stat-card" data-status="done">
-                        <span class="label">已完成</span>
-                        <span class="value" id="count-done">0</span>
-                    </div>
-                </aside>
- 
                 <!-- Reports Table List -->
-                <section class="reports-section">
-                    <div class="section-header" style="display: flex; justify-content: space-between; align-items: center;">
+                <section class="reports-section" style="width: 100%;">
+                    <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
                         <h2>📋 通報清單 (條列式)</h2>
+                        <div class="list-type-filters" style="display: flex; gap: 0.8rem; align-items: center; background: rgba(255,255,255,0.02); border: 1px solid var(--border); padding: 0.35rem 0.75rem; border-radius: 8px;">
+                            <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: bold;">顯示類型：</span>
+                            <label style="display: flex; align-items: center; gap: 0.25rem; font-size: 0.8rem; cursor: pointer; color: var(--text);">
+                                <input type="checkbox" id="filter-type-replace" checked onchange="saveTypeFilterState(); renderReports();"> 更換
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.25rem; font-size: 0.8rem; cursor: pointer; color: var(--text);">
+                                <input type="checkbox" id="filter-type-repair" checked onchange="saveTypeFilterState(); renderReports();"> 維修
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.25rem; font-size: 0.8rem; cursor: pointer; color: var(--text);">
+                                <input type="checkbox" id="filter-type-design" checked onchange="saveTypeFilterState(); renderReports();"> 設計修改
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.25rem; font-size: 0.8rem; cursor: pointer; color: var(--text);">
+                                <input type="checkbox" id="filter-type-other" checked onchange="saveTypeFilterState(); renderReports();"> 未分類
+                            </label>
+                        </div>
                         <button onclick="openExportModal()" class="btn-secondary">📥 導出 PDF 報表</button>
                     </div>
                     <div class="table-container">
@@ -105,7 +111,6 @@
                         </table>
                     </div>
                 </section>
-            </div>
             </div>
  
             <!-- Tab: GPS Log -->

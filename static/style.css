@@ -1248,3 +1248,18 @@ main {
 .export-filter-card .checkbox-label:hover {
     color: var(--primary) !important;
 }
+
+/* Reports list table height control for whole-page browsing */
+.reports-section .table-container {
+    max-height: calc(100vh - 230px);
+    overflow-y: auto;
+}
+
+.reports-section .table-container thead th {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background-color: var(--surface);
+    box-shadow: inset 0 -1px 0 var(--border);
+}
+
