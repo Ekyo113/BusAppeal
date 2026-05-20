@@ -1175,6 +1175,8 @@ function calculateStats() {
         };
     });
     
+    statsFilteredBuses.sort((a, b) => (a.plate_number || '').localeCompare(b.plate_number || '', 'zh-TW'));
+    
     const ratio = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
     
     totalBusesEl.innerText = totalCount;
