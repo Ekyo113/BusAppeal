@@ -72,6 +72,8 @@ async def update_report(report_id: str, data: dict = Body(...), token: str = Hea
             data["solution_at"] = datetime.utcnow().isoformat()
             if "completed_at" not in data or not data["completed_at"]:
                 data["completed_at"] = datetime.utcnow().isoformat()
+            if "reply" not in data or not data["reply"]:
+                data["reply"] = data["solution"]
         Database.update_report_fields(report_id, data)
     return {"status": "success"}
 
@@ -128,6 +130,7 @@ async def export_pdf(type: str, start: str, end: str, token: str = Header(None))
 class CustomExportRequest(BaseModel):
     ids: list[str]
     format: str
+    content_field: str = "solution"
 
 @router.post("/export/custom")
 async def export_custom(req: CustomExportRequest, token: str = Header(None)):
@@ -143,22 +146,30 @@ async def export_custom(req: CustomExportRequest, token: str = Header(None)):
     from urllib.parse import quote
     
     if req.format == 'excel':
-        excel_buffer = ExportService.generate_excel(reports)
+        excel_buffer = ExportService.generate_excel(reports, req.content_field)
         filename = f"維修通報報表_{datetime.now().strftime('%Y%m%d%H%M')}.xlsx"
         encoded_filename = quote(filename)
         return StreamingResponse(
             excel_buffer,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"}
+            headers={"Access-Control-Expose-Headers": "Content-Disposition", "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"}
         )
     else:
-        pdf_buffer = ExportService.generate_pdf(reports, 'report')
-        filename = f"維修通報報表_{datetime.now().strftime('%Y%m%d%H%M')}.pdf"
+        pdf_buffer = ExportService.generate_pdf(reports, 'report', req.content_field)
+        
+        # Get vendor name and month for PDF naming: "客運名稱+月份"
+        vendors = list(set([r.get('vendor_name') for r in reports if r.get('vendor_name')]))
+        vendor_name = vendors[0] if vendors else "未定義客運"
+        
+        months = list(set([r.get('completed_at')[:7] for r in reports if r.get('completed_at')]))
+        month_str = f"{months[0].replace('-', '年')}月" if months else "月份未定"
+        
+        filename = f"{vendor_name}_{month_str}.pdf"
         encoded_filename = quote(filename)
         return StreamingResponse(
             pdf_buffer,
             media_type="application/pdf",
-            headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"}
+            headers={"Access-Control-Expose-Headers": "Content-Disposition", "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"}
         )
 
 

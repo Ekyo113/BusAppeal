@@ -17,23 +17,24 @@ class ExportService:
             return 'Helvetica'
 
     @staticmethod
-    def generate_pdf(reports, export_type: str):
+    @staticmethod
+    def generate_pdf(reports, export_type: str, content_field: str = "solution"):
         buffer = BytesIO()
         c = canvas.Canvas(buffer, pagesize=A4)
         width, height = A4
         font_name = ExportService.setup_font()
         
         if export_type == 'report':
-            ExportService._draw_report_pdf(c, reports, font_name, width, height)
+            ExportService._draw_report_pdf(c, reports, font_name, width, height, content_field)
         else:
-            ExportService._draw_replacement_pdf(c, reports, font_name, width, height)
+            ExportService._draw_replacement_pdf(c, reports, font_name, width, height, content_field)
             
         c.save()
         buffer.seek(0)
         return buffer
 
     @staticmethod
-    def _draw_report_pdf(c, reports, font, width, height):
+    def _draw_report_pdf(c, reports, font, width, height, content_field: str = "solution"):
         """通報紀錄：一頁一筆"""
         for r in reports:
             # 標題
@@ -47,7 +48,7 @@ class ExportService:
             c.drawString(10*cm, y, f"車號：{r.get('car_number', '-')}")
             
             y -= 0.8*cm
-            c.drawString(2*cm, y, f"完成時間：{r.get('completed_at', '-')[:16].replace('T', ' ')}")
+            c.drawString(2*cm, y, f"完成時間：{r.get('completed_at', '-')[:16].replace('T', ' ') if r.get('completed_at') else '-'}")
             c.drawString(10*cm, y, f"處理人員：{r.get('handler_name', '-')}")
 
             y -= 0.8*cm
@@ -63,7 +64,6 @@ class ExportService:
             c.drawString(2*cm, y, "【問題描述】")
             y -= 0.8*cm
             c.setFont(font, 11)
-            # 簡單處理換行 (ReportLab 不會自動換行，這裡先做截斷或簡單換行)
             desc = r.get('description', '')
             text_obj = c.beginText(2.5*cm, y)
             text_obj.setFont(font, 11)
@@ -71,16 +71,23 @@ class ExportService:
                 text_obj.textLine(line)
             c.drawText(text_obj)
             
-            # 處理方案
+            # 內容 (處理方案 or 通報回覆)
             y -= 4*cm
             c.setFont(font, 14)
-            c.drawString(2*cm, y, "【處理方案】")
-            y -= 0.8*cm
-            c.setFont(font, 11)
-            sol = r.get('solution', '')
+            if content_field == "reply":
+                c.drawString(2*cm, y, "【通報回覆】")
+                y -= 0.8*cm
+                c.setFont(font, 11)
+                reply_val = r.get('reply') or r.get('solution') or ''
+            else:
+                c.drawString(2*cm, y, "【處理方案】")
+                y -= 0.8*cm
+                c.setFont(font, 11)
+                reply_val = r.get('solution') or ''
+                
             text_obj = c.beginText(2.5*cm, y)
             text_obj.setFont(font, 11)
-            for line in ExportService._wrap_text(sol, 40):
+            for line in ExportService._wrap_text(reply_val, 40):
                 text_obj.textLine(line)
             c.drawText(text_obj)
             
@@ -89,20 +96,21 @@ class ExportService:
             c.setDash(1, 2)
             c.line(2*cm, y, width - 2*cm, y)
             c.setFont(font, 10)
-            c.drawString(2*cm, y - 0.5*cm, "( 以下為預留空白處，供新增資訊或核章使用 )")
+            c.drawString(2*cm, y - 0.5*cm, "( 以下為預留空白處，供新增資訊 or 核章使用 )")
             
             c.showPage() # 換頁
 
     @staticmethod
-    def _draw_replacement_pdf(c, reports, font, width, height):
+    def _draw_replacement_pdf(c, reports, font, width, height, content_field: str = "solution"):
         """換件紀錄：清單式"""
         c.setFont(font, 18)
         c.drawCentredString(width/2, height - 2*cm, f"公車零件更換紀錄表")
         
         y = height - 4*cm
         c.setFont(font, 10)
-        # 表格標題
-        headers = ["日期", "客運", "車號", "更換零件", "里程", "人員"]
+        
+        header_content = "通報回覆" if content_field == "reply" else "更換零件"
+        headers = ["日期", "客運", "車號", header_content, "里程", "人員"]
         widths = [3*cm, 3*cm, 3*cm, 6*cm, 2.5*cm, 2*cm]
         
         # 畫表頭
@@ -129,7 +137,12 @@ class ExportService:
             x += widths[1]
             c.drawString(x, y, r.get('car_number', '-'))
             x += widths[2]
-            c.drawString(x, y, r.get('solution', '-')[:15])
+            
+            content_val = r.get('reply') if content_field == 'reply' else r.get('solution')
+            if not content_val:
+                content_val = r.get('solution') or '-'
+            c.drawString(x, y, str(content_val)[:15])
+            
             x += widths[3]
             c.drawString(x, y, str(r.get('mileage', '-') or '-'))
             x += widths[4]
@@ -150,7 +163,7 @@ class ExportService:
         return lines
 
     @staticmethod
-    def generate_excel(reports):
+    def generate_excel(reports, content_field="solution"):
         """產生 Excel XLSX 檔案，若未安裝 openpyxl 則自動降級為帶有 UTF-8 BOM 的 CSV 檔案"""
         try:
             import openpyxl
@@ -173,7 +186,9 @@ class ExportService:
                 bottom=Side(style='thin', color='DDDDDD')
             )
             
-            headers = ["完成日期", "客運商", "車號", "類型", "里程(KM)", "處理方案", "處理人員", "問題描述"]
+            content_header = "內容(通報回覆)" if content_field == "reply" else "內容(處理方案)"
+            # Order: 客運商/問題描述/車號/處理人/完成日(年-月-日)/里程/類型/內容
+            headers = ["客運商", "問題描述", "車號", "處理人", "完成日(年-月-日)", "里程", "類型", content_header]
             ws.append(headers)
             
             for col_idx in range(1, len(headers) + 1):
@@ -186,17 +201,21 @@ class ExportService:
             for r in reports:
                 completed_at = r.get('completed_at', '')
                 if completed_at:
-                    completed_at = completed_at[:16].replace('T', ' ')
+                    completed_at = completed_at[:10] # 年-月-日
                 
+                content_val = r.get('reply') if content_field == 'reply' else r.get('solution')
+                if not content_val:
+                    content_val = r.get('solution') or '-'
+                    
                 row_data = [
-                    completed_at,
                     r.get('vendor_name', '-'),
+                    r.get('description', '-'),
                     r.get('car_number', '-'),
-                    r.get('solution_type', '-'),
-                    r.get('mileage', '-') or '-',
-                    r.get('solution', '-'),
                     r.get('handler_name', '-'),
-                    r.get('description', '-')
+                    completed_at or '-',
+                    r.get('mileage', '-') or '-',
+                    r.get('solution_type', '-'),
+                    content_val
                 ]
                 ws.append(row_data)
                 
@@ -205,7 +224,8 @@ class ExportService:
                     cell = ws.cell(row=row_idx, column=col_idx)
                     cell.font = font_body
                     cell.border = thin_border
-                    if col_idx in [1, 2, 3, 4, 5, 7]:
+                    # Align: 1,3,4,5,6,7 center; 2,8 left
+                    if col_idx in [1, 3, 4, 5, 6, 7]:
                         cell.alignment = align_center
                     else:
                         cell.alignment = align_left
@@ -234,21 +254,28 @@ class ExportService:
             
             text_buffer = StringIO()
             writer = csv.writer(text_buffer)
-            writer.writerow(["完成日期", "客運商", "車號", "類型", "里程(KM)", "處理方案", "處理人員", "問題描述"])
+            
+            content_header = "內容(通報回覆)" if content_field == "reply" else "內容(處理方案)"
+            writer.writerow(["客運商", "問題描述", "車號", "處理人", "完成日(年-月-日)", "里程", "類型", content_header])
             
             for r in reports:
                 completed_at = r.get('completed_at', '')
                 if completed_at:
-                    completed_at = completed_at[:16].replace('T', ' ')
+                    completed_at = completed_at[:10]
+                    
+                content_val = r.get('reply') if content_field == 'reply' else r.get('solution')
+                if not content_val:
+                    content_val = r.get('solution') or '-'
+                    
                 writer.writerow([
-                    completed_at,
                     r.get('vendor_name', '-'),
+                    r.get('description', '-'),
                     r.get('car_number', '-'),
-                    r.get('solution_type', '-'),
-                    r.get('mileage', '-') or '-',
-                    r.get('solution', '-'),
                     r.get('handler_name', '-'),
-                    r.get('description', '-')
+                    completed_at or '-',
+                    r.get('mileage', '-') or '-',
+                    r.get('solution_type', '-'),
+                    content_val
                 ])
                 
             buffer.write(text_buffer.getvalue().encode('utf-8'))

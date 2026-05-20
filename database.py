@@ -120,7 +120,8 @@ class Database:
         client = cls.get_client()
         allowed_columns = {
             "car_number", "description", "solution_type", "handler_name",
-            "solution", "mileage", "status", "created_at", "completed_at"
+            "solution", "mileage", "status", "created_at", "completed_at",
+            "reply"
         }
         update_data = {k: v for k, v in fields.items() if k in allowed_columns}
         update_data["updated_at"] = datetime.utcnow().isoformat()
@@ -162,6 +163,7 @@ class Database:
         client = cls.get_client()
         update_data = {
             "solution": solution,
+            "reply": solution,
             "solution_at": datetime.utcnow().isoformat(),
             "status": "已完成",
             "completed_at": datetime.utcnow().isoformat(),
@@ -197,6 +199,7 @@ class Database:
             "description": solution,
             "ai_summary": solution[:20],
             "solution": solution,
+            "reply": solution,
             "solution_type": solution_type or "維修",
             "status": "已完成",
             "handler_name": handler_name,

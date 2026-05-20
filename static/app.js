@@ -126,6 +126,7 @@ function renderReports() {
             <td class="cell-car">${report.car_number}</td>
             <td class="cell-desc">${report.description}</td>
             <td class="cell-sol">${report.solution || '-'}</td>
+            <td class="cell-reply">${report.reply || report.solution || '-'}</td>
             <td><span class="sol-type-label ${solTypeClass}">${solType}</span></td>
             <td class="cell-mileage">${report.mileage || '-'}</td>
             <td>${report.handler_name || '-'}</td>
@@ -159,10 +160,11 @@ function viewDetail(id) {
     const solutionDisplay = document.getElementById('solution-display');
     const solutionInput = document.getElementById('solution-input');
     
-    // Set solution & mileage
+    // Set solution & mileage & reply
     solutionDisplay.innerText = report.solution || "暫無處理紀錄";
     solutionInput.value = report.solution || "";
     document.getElementById('mileage-input').value = report.mileage || "";
+    document.getElementById('reply-input').value = report.reply || report.solution || "";
 
     let mediaHtml = '';
     if (report.media_urls && report.media_urls.length > 0) {
@@ -236,6 +238,7 @@ function viewDetail(id) {
             <div class="modal-actions">
                 ${report.status === '待處理' ? `<button class="btn-primary" onclick="updateStatus('${id}', '維修中')">進入維修</button>` : ''}
                 ${report.status !== '已完成' ? `<button class="btn-primary" onclick="markDone('${id}')">完成維修並通知</button>` : ''}
+                <button class="btn-danger" onclick="deleteReport('${id}'); closeModal();">刪除</button>
                 <button class="btn-secondary" onclick="closeModal()">關閉</button>
             </div>
         </div>
@@ -251,6 +254,7 @@ async function saveSolution() {
     const solution_type = document.getElementById('edit-solution-type').value;
     const handler_name = document.getElementById('edit-handler-name').value.trim();
     const solution = document.getElementById('solution-input').value.trim();
+    const reply = document.getElementById('reply-input').value.trim();
     const mileage = document.getElementById('mileage-input').value.trim();
     
     const created_at_val = document.getElementById('edit-created-at').value;
@@ -282,6 +286,7 @@ async function saveSolution() {
                 solution_type,
                 handler_name,
                 solution,
+                reply: reply || solution,
                 mileage,
                 created_at,
                 completed_at
@@ -304,7 +309,8 @@ async function saveSolution() {
                 solution_type, 
                 handler_name, 
                 solution, 
-                mileage,
+                reply: reply || solution,
+                mileage, 
                 created_at: created_at || r.created_at,
                 completed_at: updatedCompletedAt,
                 status: solution ? '已完成' : r.status
@@ -1490,7 +1496,7 @@ async function triggerCustomExport(format) {
     const showRepair = document.getElementById('export-filter-repair').checked;
     const showDesign = document.getElementById('export-filter-design').checked;
     
-    const targetIds = allReports.filter(r => {
+    const targetReports = allReports.filter(r => {
         if (r.status !== '已完成') return false;
         if (!selectedExportIds.has(r.id)) return false;
         
@@ -1499,47 +1505,127 @@ async function triggerCustomExport(format) {
         if (type === '維修') return showRepair;
         if (type === '設計修改') return showDesign;
         return true;
-    }).map(r => r.id);
+    });
     
-    if (targetIds.length === 0) {
+    if (targetReports.length === 0) {
         showToast("請至少勾選一筆資料進行導出", "error");
         return;
     }
     
+    // 獲取選擇的內容欄位 (處理方案 / 通報回覆)
+    const contentFieldEl = document.querySelector('input[name="export-content-field"]:checked');
+    const contentField = contentFieldEl ? contentFieldEl.value : 'solution';
+    
     showToast("報表產生中，請稍候...", "success");
     
-    try {
-        const response = await fetch('/admin/export/custom', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'token': token
-            },
-            body: JSON.stringify({
-                ids: targetIds,
-                format: format
-            })
+    if (format === 'pdf') {
+        // "2.匯出pdf時,不同客運用不同pdf檔案,檔案名稱為客運名稱+月份"
+        // Group by vendor and month
+        const groups = {};
+        targetReports.forEach(r => {
+            const vendor = r.vendor_name || '未知客運';
+            const month = r.completed_at ? r.completed_at.slice(0, 7) : '無日期'; // YYYY-MM
+            const key = `${vendor}_${month}`;
+            if (!groups[key]) {
+                groups[key] = { vendor, month, ids: [] };
+            }
+            groups[key].ids.push(r.id);
         });
         
-        if (!response.ok) {
-            const err = await response.json();
-            throw new Error(err.detail || "導出失敗");
+        let successCount = 0;
+        for (const group of Object.values(groups)) {
+            try {
+                const response = await fetch('/admin/export/custom', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'token': token
+                    },
+                    body: JSON.stringify({
+                        ids: group.ids,
+                        format: 'pdf',
+                        content_field: contentField
+                    })
+                });
+                
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.detail || `匯出 ${group.vendor} PDF 失敗`);
+                }
+                
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                
+                const contentDisposition = response.headers.get('Content-Disposition');
+                let filename = `${group.vendor}_${group.month.replace('-', '年')}月.pdf`;
+                if (contentDisposition) {
+                    const matches = /filename\*=UTF-8''([^;]+)/.exec(contentDisposition);
+                    if (matches && matches[1]) {
+                        filename = decodeURIComponent(matches[1]);
+                    }
+                }
+                
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                successCount++;
+            } catch (e) {
+                console.error("Export Group Error:", e);
+                showToast(e.message, "error");
+            }
         }
-        
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        const ext = format === 'excel' ? 'xlsx' : 'pdf';
-        a.download = `維修通報報表_${new Date().toISOString().slice(0, 10)}.${ext}`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-        showToast("匯出成功！");
-    } catch (e) {
-        console.error("Export Error:", e);
-        showToast(e.message, "error");
+        if (successCount > 0) {
+            showToast(`成功匯出 ${successCount} 個 PDF 檔案！`);
+        }
+    } else {
+        // Excel format
+        try {
+            const response = await fetch('/admin/export/custom', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'token': token
+                },
+                body: JSON.stringify({
+                    ids: targetReports.map(r => r.id),
+                    format: 'excel',
+                    content_field: contentField
+                })
+            });
+            
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.detail || "導出失敗");
+            }
+            
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            
+            const contentDisposition = response.headers.get('Content-Disposition');
+            let filename = `維修通報報表_${new Date().toISOString().slice(0, 10)}.xlsx`;
+            if (contentDisposition) {
+                const matches = /filename\*=UTF-8''([^;]+)/.exec(contentDisposition);
+                if (matches && matches[1]) {
+                    filename = decodeURIComponent(matches[1]);
+                }
+            }
+            
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+            showToast("Excel 匯出成功！");
+        } catch (e) {
+            console.error("Export Error:", e);
+            showToast(e.message, "error");
+        }
     }
 }
 
