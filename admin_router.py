@@ -68,7 +68,8 @@ async def update_report(report_id: str, data: dict = Body(...), token: str = Hea
         if "solution" in data and data["solution"]:
             data["status"] = "已完成"
             data["solution_at"] = datetime.utcnow().isoformat()
-            data["completed_at"] = datetime.utcnow().isoformat()
+            if "completed_at" not in data or not data["completed_at"]:
+                data["completed_at"] = datetime.utcnow().isoformat()
         Database.update_report_fields(report_id, data)
     return {"status": "success"}
 

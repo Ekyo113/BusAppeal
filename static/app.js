@@ -108,6 +108,14 @@ function renderReports() {
     });
 }
 
+function formatDateTimeLocal(isoString) {
+    if (!isoString) return "";
+    const date = new Date(isoString);
+    const tzoffset = date.getTimezoneOffset() * 60000;
+    const localISOTime = (new Date(date.getTime() - tzoffset)).toISOString().slice(0, 16);
+    return localISOTime;
+}
+
 function viewDetail(id) {
     currentReportId = id;
     const report = allReports.find(r => r.id === id);
@@ -171,11 +179,17 @@ function viewDetail(id) {
                     <input type="text" id="edit-handler-name" value="${report.handler_name || ''}">
                 </div>
                 <div style="flex: 1;">
-                    <label>通報時間 / 完成時間</label>
-                    <p style="padding-top: 0.75rem; font-size: 0.85rem; color: var(--text-muted);">
-                        ${new Date(report.created_at).toLocaleString('zh-TW')} / <br>
-                        ${report.completed_at ? new Date(report.completed_at).toLocaleString('zh-TW') : '尚未完成'}
-                    </p>
+                    <label>通報時間</label>
+                    <input type="datetime-local" id="edit-created-at" value="${formatDateTimeLocal(report.created_at)}">
+                </div>
+            </div>
+
+            <div class="detail-row" style="display: flex; gap: 1rem; margin-bottom: 1rem;">
+                <div style="flex: 1;">
+                    <label>完成時間</label>
+                    <input type="datetime-local" id="edit-completed-at" value="${formatDateTimeLocal(report.completed_at)}">
+                </div>
+                <div style="flex: 1;">
                 </div>
             </div>
 
@@ -206,6 +220,12 @@ async function saveSolution() {
     const solution = document.getElementById('solution-input').value.trim();
     const mileage = document.getElementById('mileage-input').value.trim();
     
+    const created_at_val = document.getElementById('edit-created-at').value;
+    const completed_at_val = document.getElementById('edit-completed-at').value;
+    
+    const created_at = created_at_val ? new Date(created_at_val).toISOString() : null;
+    const completed_at = completed_at_val ? new Date(completed_at_val).toISOString() : null;
+    
     if (!car_number) {
         showToast("車號不能為空", "error");
         return;
@@ -229,12 +249,21 @@ async function saveSolution() {
                 solution_type,
                 handler_name,
                 solution,
-                mileage
+                mileage,
+                created_at,
+                completed_at
             })
         });
         if (response.ok) {
             showToast("修改已儲存");
             const now = new Date().toISOString();
+            
+            let updatedCompletedAt = completed_at;
+            if (solution && !updatedCompletedAt) {
+                const report = allReports.find(r => r.id === currentReportId);
+                updatedCompletedAt = (report && report.completed_at) ? report.completed_at : now;
+            }
+            
             allReports = allReports.map(r => r.id === currentReportId ? { 
                 ...r, 
                 car_number, 
@@ -243,8 +272,9 @@ async function saveSolution() {
                 handler_name, 
                 solution, 
                 mileage,
-                status: solution ? '已完成' : r.status,
-                completed_at: (solution && !r.completed_at) ? now : r.completed_at
+                created_at: created_at || r.created_at,
+                completed_at: updatedCompletedAt,
+                status: solution ? '已完成' : r.status
             } : r);
             
             renderReports(); // Refresh table

@@ -120,12 +120,12 @@ class Database:
         client = cls.get_client()
         allowed_columns = {
             "car_number", "description", "solution_type", "handler_name",
-            "solution", "mileage", "status"
+            "solution", "mileage", "status", "created_at", "completed_at"
         }
         update_data = {k: v for k, v in fields.items() if k in allowed_columns}
         update_data["updated_at"] = datetime.utcnow().isoformat()
         
-        if update_data.get("status") == "已完成":
+        if update_data.get("status") == "已完成" and "completed_at" not in update_data:
             update_data["completed_at"] = datetime.utcnow().isoformat()
             
         res = client.table("reports").update(update_data).eq("id", report_id).execute()
