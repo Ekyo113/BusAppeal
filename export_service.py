@@ -148,3 +148,110 @@ class ExportService:
         for i in range(0, len(text), limit):
             lines.append(text[i:i+limit])
         return lines
+
+    @staticmethod
+    def generate_excel(reports):
+        """產生 Excel XLSX 檔案，若未安裝 openpyxl 則自動降級為帶有 UTF-8 BOM 的 CSV 檔案"""
+        try:
+            import openpyxl
+            from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+            
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = "維修通報紀錄"
+            
+            font_header = Font(name="微軟正黑體", size=11, bold=True, color="FFFFFF")
+            font_body = Font(name="微軟正黑體", size=10)
+            fill_header = PatternFill(start_color="3B82F6", end_color="3B82F6", fill_type="solid")
+            align_center = Alignment(horizontal="center", vertical="center")
+            align_left = Alignment(horizontal="left", vertical="center")
+            
+            thin_border = Border(
+                left=Side(style='thin', color='DDDDDD'),
+                right=Side(style='thin', color='DDDDDD'),
+                top=Side(style='thin', color='DDDDDD'),
+                bottom=Side(style='thin', color='DDDDDD')
+            )
+            
+            headers = ["完成日期", "客運商", "車號", "類型", "里程(KM)", "處理方案", "處理人員", "問題描述"]
+            ws.append(headers)
+            
+            for col_idx in range(1, len(headers) + 1):
+                cell = ws.cell(row=1, column=col_idx)
+                cell.font = font_header
+                cell.fill = fill_header
+                cell.alignment = align_center
+                cell.border = thin_border
+                
+            for r in reports:
+                completed_at = r.get('completed_at', '')
+                if completed_at:
+                    completed_at = completed_at[:16].replace('T', ' ')
+                
+                row_data = [
+                    completed_at,
+                    r.get('vendor_name', '-'),
+                    r.get('car_number', '-'),
+                    r.get('solution_type', '-'),
+                    r.get('mileage', '-') or '-',
+                    r.get('solution', '-'),
+                    r.get('handler_name', '-'),
+                    r.get('description', '-')
+                ]
+                ws.append(row_data)
+                
+            for row_idx in range(2, len(reports) + 2):
+                for col_idx in range(1, len(headers) + 1):
+                    cell = ws.cell(row=row_idx, column=col_idx)
+                    cell.font = font_body
+                    cell.border = thin_border
+                    if col_idx in [1, 2, 3, 4, 5, 7]:
+                        cell.alignment = align_center
+                    else:
+                        cell.alignment = align_left
+                        
+            for col in ws.columns:
+                max_len = 0
+                col_letter = col[0].column_letter
+                for cell in col:
+                    val_str = str(cell.value or '')
+                    val_len = sum(2 if ord(char) > 127 else 1 for char in val_str)
+                    if val_len > max_len:
+                        max_len = val_len
+                ws.column_dimensions[col_letter].width = max(max_len + 3, 10)
+                
+            buffer = BytesIO()
+            wb.save(buffer)
+            buffer.seek(0)
+            return buffer
+        except ImportError:
+            # Fallback to UTF-8 BOM CSV
+            import csv
+            from io import StringIO
+            
+            buffer = BytesIO()
+            buffer.write(b'\xef\xbb\xbf') # BOM for Excel
+            
+            text_buffer = StringIO()
+            writer = csv.writer(text_buffer)
+            writer.writerow(["完成日期", "客運商", "車號", "類型", "里程(KM)", "處理方案", "處理人員", "問題描述"])
+            
+            for r in reports:
+                completed_at = r.get('completed_at', '')
+                if completed_at:
+                    completed_at = completed_at[:16].replace('T', ' ')
+                writer.writerow([
+                    completed_at,
+                    r.get('vendor_name', '-'),
+                    r.get('car_number', '-'),
+                    r.get('solution_type', '-'),
+                    r.get('mileage', '-') or '-',
+                    r.get('solution', '-'),
+                    r.get('handler_name', '-'),
+                    r.get('description', '-')
+                ])
+                
+            buffer.write(text_buffer.getvalue().encode('utf-8'))
+            buffer.seek(0)
+            return buffer
+

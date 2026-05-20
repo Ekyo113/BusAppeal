@@ -262,6 +262,35 @@ class Database:
             return []
 
     @classmethod
+    def get_reports_by_ids(cls, ids: list[str]):
+        """
+        獲取特定 ID 列表的通報資料，並關聯客運公司
+        """
+        if not ids:
+            return []
+        client = cls.get_client()
+        try:
+            res = client.table('reports').select('*').in_('id', ids).execute()
+            reports = res.data
+            
+            reports_map = {r['id']: r for r in reports}
+            sorted_reports = [reports_map[rid] for rid in ids if rid in reports_map]
+            
+            vendors = cls.get_bus_vendors()
+            for r in sorted_reports:
+                r['vendor_name'] = '未知客運'
+                car = (r.get('car_number', '') or '').strip()
+                for v in vendors:
+                    plate = (v.get('plate_number', '') or '').strip()
+                    if plate and plate == car:
+                        r['vendor_name'] = v.get('vendor_name', '未知客運')
+                        break
+            return sorted_reports
+        except Exception as e:
+            print(f"DB Error get_reports_by_ids: {e}")
+            return []
+
+    @classmethod
     def upload_media(cls, file_content: bytes, file_name: str, content_type: str):
         client = cls.get_client()
         # Upload to 'bus-media' bucket

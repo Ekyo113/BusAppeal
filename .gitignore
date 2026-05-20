@@ -1,0 +1,24 @@
+# Environments
+.env
+.env.*
+
+# Python Cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Local Data Logs and Temp Files
+*.json
+*.log
+
+# OS Files
+.DS_Store
+
+# Unnecessary Test and Temp Files
+test_a1.py
+debug_a2.py
+local_test_matching.py
+README_TEST.md
+

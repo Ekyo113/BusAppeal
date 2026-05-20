@@ -34,6 +34,11 @@
                 </div>
             </div>
             <div class="user-actions">
+                <select id="reports-sort-by" onchange="renderReports()" style="background: var(--surface-light); border: 1px solid var(--border); color: white; padding: 0.35rem 0.5rem; border-radius: 6px; font-size: 0.85rem; margin-right: 0.5rem; outline: none; cursor: pointer;">
+                    <option value="created_at">排序：建立時間</option>
+                    <option value="car_number">排序：車牌號碼</option>
+                    <option value="description">排序：問題描述</option>
+                </select>
                 <label class="filter-toggle">
                     <input type="checkbox" id="hide-done-check" onchange="toggleHideDone()"> 隱藏已完成
                 </label>
@@ -47,6 +52,7 @@
             <button class="tab-btn" onclick="switchTab('tab-gps')">車輛每日紀錄</button>
             <button class="tab-btn" onclick="switchTab('tab-plans')">營運方案分析</button>
             <button class="tab-btn" onclick="switchTab('tab-stats')">設計修改統計</button>
+            <button class="tab-btn" onclick="switchTab('tab-export')">導出報表</button>
         </div>
  
         <main>
@@ -218,6 +224,9 @@
                                 <table class="stats-table">
                                     <thead>
                                         <tr>
+                                            <th style="width: 40px; text-align: center;">
+                                                <input type="checkbox" id="stats-select-all-buses" onchange="toggleAllStatsBuses(this)">
+                                            </th>
                                             <th>車號</th>
                                             <th>客運商</th>
                                             <th>狀態</th>
@@ -226,6 +235,67 @@
                                         </tr>
                                     </thead>
                                     <tbody id="stats-bus-list">
+                                        <!-- Will be populated by JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+            </div>
+
+            <!-- Tab: Export Reports -->
+            <div id="tab-export" class="tab-content hidden">
+                <div class="stats-container">
+                    <div class="stats-controls" style="display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1.5rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                            <h2 style="margin: 0;">📥 導出通報與維修報表</h2>
+                            <div style="display: flex; gap: 0.75rem;">
+                                <button class="btn-primary" onclick="triggerCustomExport('pdf')">📄 匯出 PDF</button>
+                                <button class="btn-secondary" onclick="triggerCustomExport('excel')" style="background: #107c41; border-color: #107c41;">📊 匯出 Excel (XLSX)</button>
+                            </div>
+                        </div>
+                        
+                        <div class="filter-card" style="padding: 1rem; background: var(--surface-light); border: 1px solid var(--border); border-radius: 12px; width: 100%;">
+                            <span class="control-label" style="font-weight: bold; color: var(--primary); display: block; margin-bottom: 0.5rem;">🔍 篩選維修/修改類型</span>
+                            <div style="display: flex; gap: 1.5rem; flex-wrap: wrap;">
+                                <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; color: white;">
+                                    <input type="checkbox" id="export-filter-replace" checked onchange="renderExportTable()"> 更換
+                                </label>
+                                <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; color: white;">
+                                    <input type="checkbox" id="export-filter-repair" checked onchange="renderExportTable()"> 維修
+                                </label>
+                                <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; color: white;">
+                                    <input type="checkbox" id="export-filter-design" checked onchange="renderExportTable()"> 設計修改
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="progress-visualization" style="grid-template-columns: 1fr;">
+                        <div class="detail-list-box" style="width: 100%;">
+                            <div class="search-box-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                <h3 style="margin: 0;">📋 可導出資料清單</h3>
+                                <div style="color: var(--text-muted); font-size: 0.9rem;">
+                                    已選擇 <span id="export-selected-count" style="color: var(--primary); font-weight: bold;">0</span> 筆資料
+                                </div>
+                            </div>
+                            <div class="stats-table-container">
+                                <table class="stats-table">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 40px; text-align: center;">
+                                                <input type="checkbox" id="export-select-all" onchange="toggleAllExportItems(this)">
+                                            </th>
+                                            <th>狀態</th>
+                                            <th>車號</th>
+                                            <th>類型</th>
+                                            <th>處理方案</th>
+                                            <th>目前里程</th>
+                                            <th>處理人</th>
+                                            <th>完成時間</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="export-table-list">
                                         <!-- Will be populated by JS -->
                                     </tbody>
                                 </table>

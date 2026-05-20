@@ -15,6 +15,8 @@ import pytz
 from fastapi.responses import StreamingResponse
 from export_service import ExportService
 import bus_service
+from pydantic import BaseModel
+
 
 router = APIRouter(prefix="/admin")
 
@@ -122,6 +124,43 @@ async def export_pdf(type: str, start: str, end: str, token: str = Header(None))
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"}
     )
+
+class CustomExportRequest(BaseModel):
+    ids: list[str]
+    format: str
+
+@router.post("/export/custom")
+async def export_custom(req: CustomExportRequest, token: str = Header(None)):
+    verify_token(token)
+    
+    if not req.ids:
+        raise HTTPException(status_code=400, detail="請選擇至少一筆資料進行導出")
+        
+    reports = Database.get_reports_by_ids(req.ids)
+    if not reports:
+        raise HTTPException(status_code=404, detail="找不到指定的通報紀錄")
+        
+    from urllib.parse import quote
+    
+    if req.format == 'excel':
+        excel_buffer = ExportService.generate_excel(reports)
+        filename = f"維修通報報表_{datetime.now().strftime('%Y%m%d%H%M')}.xlsx"
+        encoded_filename = quote(filename)
+        return StreamingResponse(
+            excel_buffer,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"}
+        )
+    else:
+        pdf_buffer = ExportService.generate_pdf(reports, 'report')
+        filename = f"維修通報報表_{datetime.now().strftime('%Y%m%d%H%M')}.pdf"
+        encoded_filename = quote(filename)
+        return StreamingResponse(
+            pdf_buffer,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"}
+        )
+
 
 @router.get("/bus_plans")
 async def get_bus_plans(plate_number: str = None, date: str = None, token: str = Header(None)):

@@ -67,7 +67,40 @@ function renderReports() {
         return;
     }
 
-    filteredReports.forEach((report, index) => {
+    const sortedReports = [...filteredReports];
+    const sortByEl = document.getElementById('reports-sort-by');
+    const sortBy = sortByEl ? sortByEl.value : 'created_at';
+    
+    const statusPriority = {
+        '待處理': 1,
+        '維修中': 2,
+        '已完成': 3
+    };
+
+    sortedReports.sort((a, b) => {
+        // Primary: 待處理優先
+        const pA = statusPriority[a.status] || 99;
+        const pB = statusPriority[b.status] || 99;
+        if (pA !== pB) {
+            return pA - pB;
+        }
+        
+        // Secondary: 車號 / 問題描述 / 建立時間
+        if (sortBy === 'car_number') {
+            const carA = (a.car_number || '').trim();
+            const carB = (b.car_number || '').trim();
+            return carA.localeCompare(carB, 'zh-TW');
+        } else if (sortBy === 'description') {
+            const descA = (a.description || '').trim();
+            const descB = (b.description || '').trim();
+            return descA.localeCompare(descB, 'zh-TW');
+        } else {
+            // Newest first
+            return new Date(b.created_at) - new Date(a.created_at);
+        }
+    });
+
+    sortedReports.forEach((report, index) => {
         const row = document.createElement('tr');
         row.onclick = () => viewDetail(report.id);
         
@@ -318,6 +351,11 @@ function updateStats() {
         populateStatsSolutionTypes();
         calculateStats();
     }
+
+    // 同步更新導出報表分頁數據
+    if (document.getElementById('tab-export').classList.contains('active')) {
+        renderExportTable();
+    }
 }
 
 function showToast(message, type = 'success') {
@@ -427,6 +465,8 @@ function switchTab(tabId) {
         loadPlans();
     } else if (tabId === 'tab-stats') {
         loadStatsData();
+    } else if (tabId === 'tab-export') {
+        loadExportTab();
     }
 }
 
@@ -912,6 +952,22 @@ async function analyzeAllLogs() {
 let monitoredBuses = [];
 let statsRadialChart = null;
 let statsFilteredBuses = [];
+let uncheckedPlates = new Set();
+let selectedExportIds = new Set();
+let exportInitialized = false;
+
+function loadUncheckedPlates() {
+    try {
+        const saved = localStorage.getItem('unchecked_plates');
+        if (saved) {
+            uncheckedPlates = new Set(JSON.parse(saved));
+        } else {
+            uncheckedPlates = new Set();
+        }
+    } catch (e) {
+        uncheckedPlates = new Set();
+    }
+}
 
 async function loadStatsData() {
     const token = document.getElementById('admin-token').value;
@@ -925,6 +981,9 @@ async function loadStatsData() {
         if (!response.ok) throw new Error("無法取得監控車輛列表");
 
         monitoredBuses = await response.json();
+        
+        // 載入未勾選的車牌歷史狀態
+        loadUncheckedPlates();
         
         // 渲染客運商核取方塊
         populateVendorCheckboxes();
@@ -946,26 +1005,38 @@ function populateVendorCheckboxes() {
 
     const vendors = [...new Set(monitoredBuses.map(b => b.vendor_name || '未知客運'))].sort();
     
-    // 保留目前已勾選的客運商
-    const checkedVendors = new Set();
-    container.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
-        checkedVendors.add(cb.value);
-    });
+    // 從 localStorage 讀取已存勾選狀態
+    let savedCheckedVendors = null;
+    try {
+        const saved = localStorage.getItem('selected_vendors');
+        if (saved) savedCheckedVendors = new Set(JSON.parse(saved));
+    } catch (e) {
+        console.error("Error reading selected_vendors from localStorage:", e);
+    }
     
     container.innerHTML = '';
     
     vendors.forEach(vendor => {
         const div = document.createElement('div');
         // 預設為全選
-        const isChecked = checkedVendors.size === 0 || checkedVendors.has(vendor);
+        const isChecked = savedCheckedVendors === null || savedCheckedVendors.has(vendor);
         div.innerHTML = `
             <label class="checkbox-label" title="${vendor}">
-                <input type="checkbox" value="${vendor}" ${isChecked ? 'checked' : ''} onchange="calculateStats()">
+                <input type="checkbox" value="${vendor}" ${isChecked ? 'checked' : ''} onchange="onVendorCheckboxChange()">
                 ${vendor}
             </label>
         `;
         container.appendChild(div);
     });
+}
+
+function onVendorCheckboxChange() {
+    const selectedVendors = [];
+    document.querySelectorAll('#vendor-checkboxes input[type="checkbox"]:checked').forEach(cb => {
+        selectedVendors.push(cb.value);
+    });
+    localStorage.setItem('selected_vendors', JSON.stringify(selectedVendors));
+    calculateStats();
 }
 
 function populateStatsSolutionTypes() {
@@ -1061,7 +1132,6 @@ function calculateStats() {
     
     // 篩選出屬於已勾選客運商的車輛
     const targetBuses = monitoredBuses.filter(b => selectedVendors.includes(b.vendor_name || '未知客運'));
-    const totalCount = targetBuses.length;
     
     // 篩選出該類型、該方案且已完成的通報記錄
     const completedReports = allReports.filter(r => 
@@ -1082,17 +1152,24 @@ function calculateStats() {
         }
     });
     
+    let totalCount = 0;
     let completedCount = 0;
     statsFilteredBuses = targetBuses.map(bus => {
         const plate = (bus.plate_number || '').trim();
         const report = completedMap.get(plate);
         const isCompleted = !!report;
-        if (isCompleted) completedCount++;
+        
+        const isChecked = !uncheckedPlates.has(plate);
+        if (isChecked) {
+            totalCount++;
+            if (isCompleted) completedCount++;
+        }
         
         return {
             plate_number: bus.plate_number,
             vendor_name: bus.vendor_name || '未知客運',
             is_completed: isCompleted,
+            is_checked: isChecked,
             completed_at: report ? report.completed_at : null,
             handler_name: report ? report.handler_name : null
         };
@@ -1135,7 +1212,7 @@ function renderStatsBusesTable() {
     }
     
     if (displayBuses.length === 0) {
-        listBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2rem;">查無符合的車輛資料</td></tr>';
+        listBody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2rem;">查無符合的車輛資料</td></tr>';
         return;
     }
     
@@ -1153,6 +1230,9 @@ function renderStatsBusesTable() {
             : '-';
             
         row.innerHTML = `
+            <td style="text-align: center;">
+                <input type="checkbox" class="bus-checkbox" data-plate="${b.plate_number}" ${b.is_checked ? 'checked' : ''} onchange="toggleBusCheckbox(this)">
+            </td>
             <td style="font-weight: 600; color: var(--primary);">${b.plate_number}</td>
             <td>${b.vendor_name}</td>
             <td>${statusBadge}</td>
@@ -1161,6 +1241,57 @@ function renderStatsBusesTable() {
         `;
         listBody.appendChild(row);
     });
+
+    // 同步 Master Checkbox 狀態
+    const masterCheckbox = document.getElementById('stats-select-all-buses');
+    if (masterCheckbox) {
+        const allVisibleChecked = displayBuses.length > 0 && displayBuses.every(b => b.is_checked);
+        const someVisibleChecked = displayBuses.some(b => b.is_checked);
+        masterCheckbox.checked = allVisibleChecked;
+        masterCheckbox.indeterminate = someVisibleChecked && !allVisibleChecked;
+    }
+}
+
+function toggleBusCheckbox(el) {
+    const plate = el.getAttribute('data-plate');
+    if (el.checked) {
+        uncheckedPlates.delete(plate);
+    } else {
+        uncheckedPlates.add(plate);
+    }
+    localStorage.setItem('unchecked_plates', JSON.stringify(Array.from(uncheckedPlates)));
+    calculateStats();
+}
+
+function toggleAllStatsBuses(masterEl) {
+    const checked = masterEl.checked;
+    
+    const searchInput = document.getElementById('stats-bus-search');
+    const searchQuery = searchInput ? searchInput.value.toLowerCase().trim() : '';
+    const filterEl = document.querySelector('input[name="stats-filter"]:checked');
+    const filterVal = filterEl ? filterEl.value : 'all';
+    
+    let displayBuses = statsFilteredBuses;
+    if (searchQuery) {
+        displayBuses = displayBuses.filter(b => b.plate_number.toLowerCase().includes(searchQuery));
+    }
+    if (filterVal === 'completed') {
+        displayBuses = displayBuses.filter(b => b.is_completed);
+    } else if (filterVal === 'pending') {
+        displayBuses = displayBuses.filter(b => !b.is_completed);
+    }
+    
+    displayBuses.forEach(b => {
+        const plate = b.plate_number;
+        if (checked) {
+            uncheckedPlates.delete(plate);
+        } else {
+            uncheckedPlates.add(plate);
+        }
+    });
+    
+    localStorage.setItem('unchecked_plates', JSON.stringify(Array.from(uncheckedPlates)));
+    calculateStats();
 }
 
 function updateRadialChart(ratio) {
@@ -1217,3 +1348,196 @@ function updateRadialChart(ratio) {
     statsRadialChart = new ApexCharts(container, options);
     statsRadialChart.render();
 }
+
+// ==========================================================================
+// 導出報表分頁邏輯 (Tab: Export Reports)
+// ==========================================================================
+function loadExportTab() {
+    const completedReports = allReports.filter(r => r.status === '已完成');
+    
+    // 若尚未初始化，預設將所有已完成的通報加入選取清單中 (全選)
+    if (!exportInitialized) {
+        selectedExportIds.clear();
+        completedReports.forEach(r => selectedExportIds.add(r.id));
+        exportInitialized = true;
+    }
+    
+    renderExportTable();
+}
+
+function renderExportTable() {
+    const listBody = document.getElementById('export-table-list');
+    const selectedCountEl = document.getElementById('export-selected-count');
+    if (!listBody || !selectedCountEl) return;
+    
+    // 獲取篩選核取方塊的狀態
+    const showReplace = document.getElementById('export-filter-replace').checked;
+    const showRepair = document.getElementById('export-filter-repair').checked;
+    const showDesign = document.getElementById('export-filter-design').checked;
+    
+    // 篩選出符合勾選類型的已完成通報紀錄
+    const displayReports = allReports.filter(r => {
+        if (r.status !== '已完成') return false;
+        
+        const type = r.solution_type;
+        if (type === '更換') return showReplace;
+        if (type === '維修') return showRepair;
+        if (type === '設計修改') return showDesign;
+        
+        // 若通報無類型，預設也隨篩選顯示（或是預設均為 true）
+        return true;
+    });
+    
+    // 排序：完成時間由新到舊
+    displayReports.sort((a, b) => new Date(b.completed_at) - new Date(a.completed_at));
+    
+    listBody.innerHTML = '';
+    
+    if (displayReports.length === 0) {
+        listBody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2rem;">查無符合篩選條件的已完成通報紀錄</td></tr>';
+        selectedCountEl.innerText = '0';
+        return;
+    }
+    
+    let visibleSelectedCount = 0;
+    
+    displayReports.forEach(r => {
+        const isChecked = selectedExportIds.has(r.id);
+        if (isChecked) visibleSelectedCount++;
+        
+        const completedTimeStr = r.completed_at 
+            ? new Date(r.completed_at).toLocaleString('zh-TW', { 
+                month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false 
+              })
+            : '-';
+            
+        const solTypeClass = r.solution_type === '更換' ? 'sol-replace' : r.solution_type === '維修' ? 'sol-repair' : '';
+            
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td style="text-align: center;">
+                <input type="checkbox" class="export-checkbox" data-id="${r.id}" ${isChecked ? 'checked' : ''} onchange="toggleExportItem(this)">
+            </td>
+            <td><span class="status-label done">已完成</span></td>
+            <td style="font-weight: 600; color: var(--primary);">${r.car_number}</td>
+            <td><span class="sol-type-label ${solTypeClass}">${r.solution_type || '-'}</span></td>
+            <td>${r.solution || '-'}</td>
+            <td>${r.mileage || '-'} KM</td>
+            <td>${r.handler_name || '-'}</td>
+            <td>${completedTimeStr}</td>
+        `;
+        listBody.appendChild(row);
+    });
+    
+    // 更新已選取筆數顯示
+    selectedCountEl.innerText = visibleSelectedCount;
+    
+    // 同步導出 Master Checkbox 狀態
+    const masterCheckbox = document.getElementById('export-select-all');
+    if (masterCheckbox) {
+        const allVisibleChecked = displayReports.every(r => selectedExportIds.has(r.id));
+        const someVisibleChecked = displayReports.some(r => selectedExportIds.has(r.id));
+        masterCheckbox.checked = allVisibleChecked;
+        masterCheckbox.indeterminate = someVisibleChecked && !allVisibleChecked;
+    }
+}
+
+function toggleExportItem(el) {
+    const id = el.getAttribute('data-id');
+    if (el.checked) {
+        selectedExportIds.add(id);
+    } else {
+        selectedExportIds.delete(id);
+    }
+    renderExportTable();
+}
+
+function toggleAllExportItems(masterEl) {
+    const checked = masterEl.checked;
+    
+    const showReplace = document.getElementById('export-filter-replace').checked;
+    const showRepair = document.getElementById('export-filter-repair').checked;
+    const showDesign = document.getElementById('export-filter-design').checked;
+    
+    const displayReports = allReports.filter(r => {
+        if (r.status !== '已完成') return false;
+        const type = r.solution_type;
+        if (type === '更換') return showReplace;
+        if (type === '維修') return showRepair;
+        if (type === '設計修改') return showDesign;
+        return true;
+    });
+    
+    displayReports.forEach(r => {
+        if (checked) {
+            selectedExportIds.add(r.id);
+        } else {
+            selectedExportIds.delete(r.id);
+        }
+    });
+    
+    renderExportTable();
+}
+
+async function triggerCustomExport(format) {
+    const token = document.getElementById('admin-token').value;
+    if (!token) return;
+    
+    // 我們只導出目前已選中「且」符合當下篩選類型顯示的項目
+    const showReplace = document.getElementById('export-filter-replace').checked;
+    const showRepair = document.getElementById('export-filter-repair').checked;
+    const showDesign = document.getElementById('export-filter-design').checked;
+    
+    const targetIds = allReports.filter(r => {
+        if (r.status !== '已完成') return false;
+        if (!selectedExportIds.has(r.id)) return false;
+        
+        const type = r.solution_type;
+        if (type === '更換') return showReplace;
+        if (type === '維修') return showRepair;
+        if (type === '設計修改') return showDesign;
+        return true;
+    }).map(r => r.id);
+    
+    if (targetIds.length === 0) {
+        showToast("請至少勾選一筆資料進行導出", "error");
+        return;
+    }
+    
+    showToast("報表產生中，請稍候...", "success");
+    
+    try {
+        const response = await fetch('/admin/export/custom', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'token': token
+            },
+            body: JSON.stringify({
+                ids: targetIds,
+                format: format
+            })
+        });
+        
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.detail || "導出失敗");
+        }
+        
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const ext = format === 'excel' ? 'xlsx' : 'pdf';
+        a.download = `維修通報報表_${new Date().toISOString().slice(0, 10)}.${ext}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        showToast("匯出成功！");
+    } catch (e) {
+        console.error("Export Error:", e);
+        showToast(e.message, "error");
+    }
+}
+
