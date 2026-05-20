@@ -174,6 +174,7 @@ function renderReports() {
             <td class="cell-desc">${report.description}</td>
             <td class="cell-sol">${report.solution || '-'}</td>
             <td class="cell-reply">${report.reply || report.solution || '-'}</td>
+            <td>${report.component || '-'}</td>
             <td><span class="sol-type-label ${solTypeClass}">${solType}</span></td>
             <td class="cell-mileage">${report.mileage || '-'}</td>
             <td>${report.handler_name || '-'}</td>
@@ -272,6 +273,20 @@ function viewDetail(id) {
                     <input type="datetime-local" id="edit-completed-at" value="${formatDateTimeLocal(report.completed_at)}">
                 </div>
                 <div style="flex: 1;">
+                    <label>部件</label>
+                    <select id="edit-component">
+                        <option value="" ${!report.component ? 'selected' : ''}>未選擇</option>
+                        <option value="TMS" ${report.component === 'TMS' ? 'selected' : ''}>TMS</option>
+                        <option value="動力" ${report.component === '動力' ? 'selected' : ''}>動力</option>
+                        <option value="BMS" ${report.component === 'BMS' ? 'selected' : ''}>BMS</option>
+                        <option value="方向燈座" ${report.component === '方向燈座' ? 'selected' : ''}>方向燈座</option>
+                        <option value="車門" ${report.component === '車門' ? 'selected' : ''}>車門</option>
+                        <option value="車裝" ${report.component === '車裝' ? 'selected' : ''}>車裝</option>
+                        <option value="燈光" ${report.component === '燈光' ? 'selected' : ''}>燈光</option>
+                        <option value="底盤件" ${report.component === '底盤件' ? 'selected' : ''}>底盤件</option>
+                        <option value="儀錶" ${report.component === '儀錶' ? 'selected' : ''}>儀錶</option>
+                        <option value="其他" ${report.component === '其他' ? 'selected' : ''}>其他</option>
+                    </select>
                 </div>
             </div>
 
@@ -299,6 +314,7 @@ async function saveSolution() {
     const car_number = document.getElementById('edit-car-number').value.trim();
     const description = document.getElementById('edit-description').value.trim();
     const solution_type = document.getElementById('edit-solution-type').value;
+    const component = document.getElementById('edit-component').value;
     const handler_name = document.getElementById('edit-handler-name').value.trim();
     const solution = document.getElementById('solution-input').value.trim();
     const reply = document.getElementById('reply-input').value.trim();
@@ -331,6 +347,7 @@ async function saveSolution() {
                 car_number,
                 description,
                 solution_type,
+                component,
                 handler_name,
                 solution,
                 reply: reply || solution,
@@ -354,6 +371,7 @@ async function saveSolution() {
                 car_number, 
                 description, 
                 solution_type, 
+                component,
                 handler_name, 
                 solution, 
                 reply: reply || solution,
@@ -523,6 +541,8 @@ function switchTab(tabId) {
         loadStatsData();
     } else if (tabId === 'tab-export') {
         loadExportTab();
+    } else if (tabId === 'tab-quality') {
+        loadQualityStats();
     }
 }
 
@@ -1742,4 +1762,213 @@ async function triggerCustomExport(format) {
         }
     }
 }
+
+// ==========================================================================
+// 品情統計分頁邏輯 (Tab: Quality Stats)
+// ==========================================================================
+let qualityChart = null;
+
+async function loadQualityStats() {
+    // 1. 取得目前月份字串 (格式: YYYY-MM)
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth(); // 0-11
+    const yearMonthStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
+    
+    // 更新標題為當前月份
+    const titleEl = document.getElementById('quality-title-month');
+    if (titleEl) {
+        titleEl.innerText = `📊 品情統計 (${currentYear}年${currentMonth + 1}月)`;
+    }
+
+    // 2. 篩選本月且類型為更換或維修的通報
+    const filtered = allReports.filter(r => {
+        const dateStr = r.completed_at || r.created_at;
+        if (!dateStr || !dateStr.startsWith(yearMonthStr)) return false;
+        return r.solution_type === '更換' || r.solution_type === '維修';
+    });
+
+    // 3. 定義部件選項清單 (用於堆疊圖 Series)
+    const componentsList = ["TMS", "動力", "BMS", "方向燈座", "車門", "車裝", "燈光", "底盤件", "儀錶", "其他", "未分類"];
+    
+    // 4. 初始化客運商統計資料結構
+    const vendorStats = {};
+    
+    filtered.forEach(r => {
+        // 解析客運商
+        let vendor = '未知客運';
+        const car = (r.car_number || '').trim();
+        if (monitoredBuses && monitoredBuses.length > 0) {
+            const found = monitoredBuses.find(b => (b.plate_number || '').trim() === car);
+            if (found) {
+                vendor = found.vendor_name || '未知客運';
+            }
+        }
+        
+        // 規範部件名稱
+        let comp = (r.component || '').trim();
+        if (!comp) {
+            comp = '未分類';
+        } else if (!componentsList.includes(comp)) {
+            comp = '其他';
+        }
+        
+        if (!vendorStats[vendor]) {
+            vendorStats[vendor] = {
+                vendor: vendor,
+                replaceCount: 0,
+                repairCount: 0,
+                totalCount: 0,
+                componentCounts: {}
+            };
+            componentsList.forEach(c => {
+                vendorStats[vendor].componentCounts[c] = 0;
+            });
+        }
+        
+        if (r.solution_type === '更換') {
+            vendorStats[vendor].replaceCount++;
+        } else if (r.solution_type === '維修') {
+            vendorStats[vendor].repairCount++;
+        }
+        vendorStats[vendor].totalCount++;
+        vendorStats[vendor].componentCounts[comp]++;
+    });
+
+    // 轉為陣列並依「總累計件數」從高到低排序
+    const vendorArray = Object.values(vendorStats);
+    vendorArray.sort((a, b) => b.totalCount - a.totalCount);
+
+    // 5. 渲染右側表格 (客運商累計件數)
+    const tableBody = document.getElementById('quality-vendor-table-body');
+    if (tableBody) {
+        tableBody.innerHTML = '';
+        if (vendorArray.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 2rem;">本月查無維修或更換紀錄</td></tr>';
+        } else {
+            vendorArray.forEach(v => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td style="font-weight: 600;">${v.vendor}</td>
+                    <td style="text-align: center;">${v.replaceCount}</td>
+                    <td style="text-align: center;">${v.repairCount}</td>
+                    <td style="text-align: center; color: var(--primary); font-weight: bold;">${v.totalCount}</td>
+                `;
+                tableBody.appendChild(tr);
+            });
+        }
+    }
+
+    // 6. 渲染左側 ApexCharts 橫式堆疊圖
+    const chartContainer = document.getElementById('quality-stacked-chart');
+    if (!chartContainer) return;
+
+    if (vendorArray.length === 0) {
+        chartContainer.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 5rem 0; font-size: 0.95rem;">本月尚無通報統計資料，無法產生圖表。</div>';
+        if (qualityChart) {
+            qualityChart.destroy();
+            qualityChart = null;
+        }
+        return;
+    }
+
+    // Y 軸類別：排序後的客運商列表 (Y 軸從高到低，即陣列首項在最上方)
+    const categories = vendorArray.map(v => v.vendor);
+
+    // X 軸數據：每個部件作為一組 Series，長度與客運商列表相同
+    const series = componentsList.map(comp => {
+        return {
+            name: comp,
+            data: vendorArray.map(v => v.componentCounts[comp] || 0)
+        };
+    });
+
+    // 過濾掉全為 0 的部件，保持圖例乾淨
+    const activeSeries = series.filter(s => s.data.some(val => val > 0));
+
+    const options = {
+        series: activeSeries.length > 0 ? activeSeries : [{ name: '無資料', data: Array(categories.length).fill(0) }],
+        chart: {
+            type: 'bar',
+            height: Math.max(350, categories.length * 45 + 100), // 動態自適應高度
+            stacked: true,
+            toolbar: { show: true },
+            background: 'transparent'
+        },
+        plotOptions: {
+            bar: {
+                horizontal: true,
+                dataLabels: {
+                    total: {
+                        enabled: true,
+                        offsetX: 8,
+                        style: {
+                            fontSize: '12px',
+                            fontWeight: 900,
+                            colors: ['#fff']
+                        }
+                    }
+                }
+            }
+        },
+        colors: [
+            '#3b82f6', // TMS (藍)
+            '#f59e0b', // 動力 (黃)
+            '#10b981', // BMS (綠)
+            '#ec4899', // 方向燈座 (粉)
+            '#8b5cf6', // 車門 (紫)
+            '#06b6d4', // 車裝 (青)
+            '#ef4444', // 燈光 (紅)
+            '#14b8a6', // 底盤件 (藍綠)
+            '#f97316', // 儀錶 (橘)
+            '#6b7280', // 其他 (灰)
+            '#9ca3af'  // 未分類 (淺灰)
+        ],
+        stroke: {
+            width: 1,
+            colors: ['var(--surface)']
+        },
+        xaxis: {
+            categories: categories,
+            labels: {
+                style: { colors: '#94a3b8', fontSize: '11px' }
+            },
+            title: {
+                text: '案件數量 (件)',
+                style: { color: '#94a3b8', fontSize: '12px' }
+            }
+        },
+        yaxis: {
+            labels: {
+                style: { colors: '#f1f5f9', fontSize: '12px', fontWeight: 'bold' }
+            }
+        },
+        tooltip: {
+            theme: 'dark',
+            y: {
+                formatter: function (val) {
+                    return val + " 件";
+                }
+            }
+        },
+        fill: {
+            opacity: 0.95
+        },
+        legend: {
+            position: 'top',
+            horizontalAlign: 'left',
+            labels: { colors: '#94a3b8' },
+            fontSize: '12px'
+        },
+        theme: { mode: 'dark' }
+    };
+
+    if (qualityChart) {
+        qualityChart.destroy();
+    }
+    chartContainer.innerHTML = '';
+    qualityChart = new ApexCharts(chartContainer, options);
+    qualityChart.render();
+}
+
 

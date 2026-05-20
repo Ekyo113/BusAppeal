@@ -61,6 +61,7 @@
             <button class="tab-btn" onclick="switchTab('tab-plans')">營運方案分析</button>
             <button class="tab-btn" onclick="switchTab('tab-stats')">設計修改統計</button>
             <button class="tab-btn" onclick="switchTab('tab-export')">導出報表</button>
+            <button class="tab-btn" onclick="switchTab('tab-quality')">品情統計</button>
         </div>
  
         <main>
@@ -97,6 +98,7 @@
                                     <th width="200">問題描述</th>
                                     <th width="150">處理方案</th>
                                     <th width="150">通報回覆</th>
+                                    <th width="100">部件</th>
                                     <th width="80">類型</th>
                                     <th width="80">里程</th>
                                     <th width="80">處理人</th>
@@ -320,6 +322,48 @@
                                     </tbody>
                                 </table>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab: Quality Stats -->
+            <div id="tab-quality" class="tab-content hidden">
+                <div class="stats-header" style="margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h2 id="quality-title-month">📊 品情統計 (本月)</h2>
+                        <p class="text-muted" style="font-size: 0.9rem; margin-top: 0.25rem;">統計範圍：僅引用本月 (當前月份) 之通報紀錄，僅統計「更換」與「維修」類型之案件。</p>
+                    </div>
+                </div>
+
+                <div class="dashboard-grid" style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
+                    <!-- Left: Stacked horizontal bar chart -->
+                    <div class="chart-card" style="background: var(--surface); border: 1px solid var(--border); padding: 1.5rem; border-radius: 12px; min-height: 450px;">
+                        <h3 style="margin-bottom: 1.5rem; color: white; display: flex; align-items: center; gap: 0.5rem;">
+                            📈 各客運商部件件數統計 (堆疊橫條圖)
+                        </h3>
+                        <div id="quality-stacked-chart" style="width: 100%;"></div>
+                    </div>
+
+                    <!-- Right: Table showing cumulative replace + repair counts -->
+                    <div class="detail-list-box" style="background: var(--surface); border: 1px solid var(--border); padding: 1.5rem; border-radius: 12px;">
+                        <h3 style="margin-bottom: 1.5rem; color: white; display: flex; align-items: center; gap: 0.5rem;">
+                            📋 客運商累計件數 (更換 + 維修)
+                        </h3>
+                        <div class="stats-table-container" style="max-height: 450px; overflow-y: auto;">
+                            <table class="stats-table">
+                                <thead>
+                                    <tr>
+                                        <th>客運商</th>
+                                        <th style="text-align: center;">更換件數</th>
+                                        <th style="text-align: center;">維修件數</th>
+                                        <th style="text-align: center; color: var(--primary); font-weight: bold;">總累計</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="quality-vendor-table-body">
+                                    <!-- Will be populated by JS -->
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
