@@ -180,10 +180,12 @@ function renderReports() {
             <td>${report.handler_name || '-'}</td>
             <td class="cell-time">${createdTimeStr}</td>
             <td class="cell-time">${completedTimeStr}</td>
-            <td class="table-actions">
-                <button onclick="event.stopPropagation(); viewDetail('${report.id}')">詳情</button>
-                ${report.status !== '已完成' ? `<button class="btn-primary" onclick="event.stopPropagation(); markDone('${report.id}')">完成</button>` : ''}
-                <button class="btn-danger" onclick="event.stopPropagation(); deleteReport('${report.id}')">刪除</button>
+            <td>
+                <div class="table-actions">
+                    <button onclick="event.stopPropagation(); viewDetail('${report.id}')">詳情</button>
+                    ${report.status !== '已完成' ? `<button class="btn-primary" onclick="event.stopPropagation(); markDone('${report.id}')">完成</button>` : ''}
+                    <button class="btn-danger" onclick="event.stopPropagation(); deleteReport('${report.id}')">刪除</button>
+                </div>
             </td>
         `;
         list.appendChild(row);
@@ -279,6 +281,8 @@ function viewDetail(id) {
                         <option value="TMS" ${report.component === 'TMS' ? 'selected' : ''}>TMS</option>
                         <option value="動力" ${report.component === '動力' ? 'selected' : ''}>動力</option>
                         <option value="BMS" ${report.component === 'BMS' ? 'selected' : ''}>BMS</option>
+                        <option value="冷氣" ${report.component === '冷氣' ? 'selected' : ''}>冷氣</option>
+                        <option value="電子影像" ${report.component === '電子影像' ? 'selected' : ''}>電子影像</option>
                         <option value="方向燈座" ${report.component === '方向燈座' ? 'selected' : ''}>方向燈座</option>
                         <option value="車門" ${report.component === '車門' ? 'selected' : ''}>車門</option>
                         <option value="車裝" ${report.component === '車裝' ? 'selected' : ''}>車裝</option>
@@ -1789,7 +1793,7 @@ async function loadQualityStats() {
     });
 
     // 3. 定義部件選項清單 (用於堆疊圖 Series)
-    const componentsList = ["TMS", "動力", "BMS", "方向燈座", "車門", "車裝", "燈光", "底盤件", "儀錶", "其他", "未分類"];
+    const componentsList = ["TMS", "動力", "BMS", "冷氣", "電子影像", "方向燈座", "車門", "車裝", "燈光", "底盤件", "儀錶", "其他", "未分類"];
     
     // 4. 初始化客運商統計資料結構
     const vendorStats = {};
@@ -1915,6 +1919,8 @@ async function loadQualityStats() {
             '#3b82f6', // TMS (藍)
             '#f59e0b', // 動力 (黃)
             '#10b981', // BMS (綠)
+            '#0ea5e9', // 冷氣 (淺藍)
+            '#d946ef', // 電子影像 (洋紅)
             '#ec4899', // 方向燈座 (粉)
             '#8b5cf6', // 車門 (紫)
             '#06b6d4', // 車裝 (青)
