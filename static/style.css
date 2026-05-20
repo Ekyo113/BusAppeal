@@ -937,3 +937,296 @@ main {
 @keyframes spin {
     to { transform: rotate(360deg); }
 }
+
+/* ==========================================================================
+   設計修改統計分頁樣式 (Tab: Statistics)
+   ========================================================================== */
+.stats-section {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.stats-controls-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+}
+
+@media (min-width: 768px) {
+    .stats-controls-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+.control-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+}
+
+.control-label {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.control-inputs {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.select-input {
+    background: var(--surface-light);
+    border: 1px solid var(--border);
+    color: white;
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    width: 100%;
+    box-sizing: border-box;
+    transition: border-color 0.2s;
+}
+
+.select-input:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+.multi-select-container {
+    background: var(--surface-light);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.75rem;
+    max-height: 120px;
+    overflow-y: auto;
+}
+
+.checkbox-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 0.5rem;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text);
+    font-size: 0.9rem;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.checkbox-label input[type="checkbox"] {
+    cursor: pointer;
+    accent-color: var(--primary);
+    width: 16px;
+    height: 16px;
+    margin: 0;
+}
+
+.stats-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+.summary-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+}
+
+.summary-icon {
+    font-size: 1.75rem;
+    width: 48px;
+    height: 48px;
+    background: var(--surface-light);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.summary-details {
+    display: flex;
+    flex-direction: column;
+}
+
+.summary-label {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.15rem;
+}
+
+.summary-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: white;
+    font-family: 'Outfit', sans-serif;
+}
+
+.progress-visualization {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+}
+
+@media (min-width: 1024px) {
+    .progress-visualization {
+        grid-template-columns: 320px 1fr;
+    }
+}
+
+.chart-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 320px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    box-sizing: border-box;
+}
+
+.detail-list-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    box-sizing: border-box;
+    min-width: 0;
+}
+
+.detail-list-box h3 {
+    font-size: 1.1rem;
+    color: white;
+}
+
+.search-box-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.search-input {
+    background: var(--surface-light);
+    border: 1px solid var(--border);
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    min-width: 200px;
+    box-sizing: border-box;
+    transition: border-color 0.2s;
+}
+
+.search-input:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+.filter-radio-group {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+}
+
+.filter-radio-group label {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    cursor: pointer;
+}
+
+.filter-radio-group input[type="radio"] {
+    accent-color: var(--primary);
+    margin: 0;
+    cursor: pointer;
+}
+
+.stats-table-container {
+    overflow-x: auto;
+    max-height: 400px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+
+.stats-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    text-align: left;
+}
+
+.stats-table th {
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text-muted);
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.stats-table td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    white-space: nowrap;
+}
+
+.stats-table tr:hover {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.badge-status {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    border-radius: 99px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.badge-status.completed {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.badge-status.pending {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+

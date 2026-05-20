@@ -142,6 +142,12 @@ async def get_bus_plates(token: str = Header(None)):
     plates = bus_service.fetch_unique_plates()
     return {"plates": plates}
 
+@router.get("/monitored_buses")
+async def get_monitored_buses(token: str = Header(None)):
+    verify_token(token)
+    buses = Database.get_bus_vendors()
+    return buses
+
 @router.post("/bus_plans/sync_schedules")
 async def sync_schedules(city: str = "Kaohsiung", token: str = Header(None)):
     global is_syncing

@@ -312,6 +312,12 @@ function updateStats() {
     document.getElementById('count-pending').innerText = allReports.filter(r => r.status === '待處理').length;
     document.getElementById('count-in-progress').innerText = allReports.filter(r => r.status === '維修中').length;
     document.getElementById('count-done').innerText = allReports.filter(r => r.status === '已完成').length;
+    
+    // 同步更新統計分頁數據
+    if (monitoredBuses && monitoredBuses.length > 0) {
+        populateStatsSolutionTypes();
+        calculateStats();
+    }
 }
 
 function showToast(message, type = 'success') {
@@ -419,6 +425,8 @@ function switchTab(tabId) {
     } else if (tabId === 'tab-plans') {
         loadPlates();
         loadPlans();
+    } else if (tabId === 'tab-stats') {
+        loadStatsData();
     }
 }
 
@@ -896,4 +904,316 @@ async function analyzeAllLogs() {
         console.error("Analysis Error:", error);
         showToast(`分析過程發生錯誤: ${error.message}`, "error");
     }
+}
+
+// ==========================================================================
+// 設計修改統計分頁邏輯 (Tab: Statistics)
+// ==========================================================================
+let monitoredBuses = [];
+let statsRadialChart = null;
+let statsFilteredBuses = [];
+
+async function loadStatsData() {
+    const token = document.getElementById('admin-token').value;
+    if (!token) return;
+
+    try {
+        const response = await fetch('/admin/monitored_buses', {
+            headers: { 'token': token }
+        });
+
+        if (!response.ok) throw new Error("無法取得監控車輛列表");
+
+        monitoredBuses = await response.json();
+        
+        // 渲染客運商核取方塊
+        populateVendorCheckboxes();
+        
+        // 渲染修改類型下拉選單
+        populateStatsSolutionTypes();
+        
+        // 計算與渲染統計結果
+        calculateStats();
+    } catch (error) {
+        console.error("Failed to load monitored buses stats data:", error);
+        showToast("載入車輛統計數據失敗", "error");
+    }
+}
+
+function populateVendorCheckboxes() {
+    const container = document.getElementById('vendor-checkboxes');
+    if (!container) return;
+
+    const vendors = [...new Set(monitoredBuses.map(b => b.vendor_name || '未知客運'))].sort();
+    
+    // 保留目前已勾選的客運商
+    const checkedVendors = new Set();
+    container.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
+        checkedVendors.add(cb.value);
+    });
+    
+    container.innerHTML = '';
+    
+    vendors.forEach(vendor => {
+        const div = document.createElement('div');
+        // 預設為全選
+        const isChecked = checkedVendors.size === 0 || checkedVendors.has(vendor);
+        div.innerHTML = `
+            <label class="checkbox-label" title="${vendor}">
+                <input type="checkbox" value="${vendor}" ${isChecked ? 'checked' : ''} onchange="calculateStats()">
+                ${vendor}
+            </label>
+        `;
+        container.appendChild(div);
+    });
+}
+
+function populateStatsSolutionTypes() {
+    const select = document.getElementById('stats-solution-type');
+    if (!select) return;
+
+    const currentVal = select.value || '設計修改';
+    
+    // 從現有通報單撈取所有的 solution_type 類型
+    let types = [...new Set(allReports.map(r => r.solution_type).filter(Boolean))];
+    
+    // 預設一定要有這三種基本類型
+    const defaults = ['設計修改', '維修', '更換'];
+    defaults.forEach(d => {
+        if (!types.includes(d)) {
+            types.push(d);
+        }
+    });
+    
+    types = types.sort();
+    
+    select.innerHTML = '';
+    types.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t;
+        opt.innerText = t;
+        if (t === currentVal) opt.selected = true;
+        select.appendChild(opt);
+    });
+    
+    onStatsTypeChange();
+}
+
+function onStatsTypeChange() {
+    const typeSelect = document.getElementById('stats-solution-type');
+    const solSelect = document.getElementById('stats-solution');
+    if (!typeSelect || !solSelect) return;
+
+    const selectedType = typeSelect.value;
+    const prevSol = solSelect.value;
+    
+    // 篩選出已完成、符合該類型且有填處理方案的通報
+    const matchingReports = allReports.filter(r => 
+        r.status === '已完成' && 
+        r.solution_type === selectedType && 
+        r.solution
+    );
+    
+    // 取得不重複的處理方案 (unique solutions matching type)
+    const uniqueSolutions = [...new Set(matchingReports.map(r => r.solution))].sort();
+    
+    solSelect.innerHTML = '<option value="">選擇處理方案...</option>';
+    uniqueSolutions.forEach(sol => {
+        const opt = document.createElement('option');
+        opt.value = sol;
+        opt.innerText = sol;
+        if (sol === prevSol) opt.selected = true;
+        solSelect.appendChild(opt);
+    });
+    
+    calculateStats();
+}
+
+function calculateStats() {
+    const typeSelect = document.getElementById('stats-solution-type');
+    const solSelect = document.getElementById('stats-solution');
+    
+    const totalBusesEl = document.getElementById('stats-total-buses');
+    const completedBusesEl = document.getElementById('stats-completed-buses');
+    const ratioEl = document.getElementById('stats-ratio');
+    
+    if (!typeSelect || !solSelect || !totalBusesEl || !completedBusesEl || !ratioEl) return;
+
+    const selectedType = typeSelect.value;
+    const selectedSol = solSelect.value;
+    
+    // 獲取勾選的客運商
+    const selectedVendors = [];
+    document.querySelectorAll('#vendor-checkboxes input[type="checkbox"]:checked').forEach(cb => {
+        selectedVendors.push(cb.value);
+    });
+    
+    // 如果未選擇任何客運商，或是未選擇處理方案，則呈現 0
+    if (selectedVendors.length === 0 || !selectedSol) {
+        totalBusesEl.innerText = '0';
+        completedBusesEl.innerText = '0';
+        ratioEl.innerText = '0%';
+        statsFilteredBuses = [];
+        renderStatsBusesTable();
+        updateRadialChart(0);
+        return;
+    }
+    
+    // 篩選出屬於已勾選客運商的車輛
+    const targetBuses = monitoredBuses.filter(b => selectedVendors.includes(b.vendor_name || '未知客運'));
+    const totalCount = targetBuses.length;
+    
+    // 篩選出該類型、該方案且已完成的通報記錄
+    const completedReports = allReports.filter(r => 
+        r.status === '已完成' && 
+        r.solution_type === selectedType && 
+        r.solution === selectedSol
+    );
+    
+    // 建立車牌對應通報記錄的 Map
+    const completedMap = new Map();
+    completedReports.forEach(r => {
+        const car = (r.car_number || '').trim();
+        if (car) {
+            // 如有多筆相同車牌的完成記錄，取最新的一筆
+            if (!completedMap.has(car) || new Date(r.completed_at) > new Date(completedMap.get(car).completed_at)) {
+                completedMap.set(car, r);
+            }
+        }
+    });
+    
+    let completedCount = 0;
+    statsFilteredBuses = targetBuses.map(bus => {
+        const plate = (bus.plate_number || '').trim();
+        const report = completedMap.get(plate);
+        const isCompleted = !!report;
+        if (isCompleted) completedCount++;
+        
+        return {
+            plate_number: bus.plate_number,
+            vendor_name: bus.vendor_name || '未知客運',
+            is_completed: isCompleted,
+            completed_at: report ? report.completed_at : null,
+            handler_name: report ? report.handler_name : null
+        };
+    });
+    
+    const ratio = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+    
+    totalBusesEl.innerText = totalCount;
+    completedBusesEl.innerText = completedCount;
+    ratioEl.innerText = `${ratio}%`;
+    
+    renderStatsBusesTable();
+    updateRadialChart(ratio);
+}
+
+function renderStatsBusesTable() {
+    const listBody = document.getElementById('stats-bus-list');
+    const searchInput = document.getElementById('stats-bus-search');
+    if (!listBody || !searchInput) return;
+
+    const searchQuery = searchInput.value.toLowerCase().trim();
+    
+    const filterEl = document.querySelector('input[name="stats-filter"]:checked');
+    const filterVal = filterEl ? filterEl.value : 'all';
+    
+    listBody.innerHTML = '';
+    
+    let displayBuses = statsFilteredBuses;
+    
+    // 車號關鍵字搜尋
+    if (searchQuery) {
+        displayBuses = displayBuses.filter(b => b.plate_number.toLowerCase().includes(searchQuery));
+    }
+    
+    // 狀態篩選
+    if (filterVal === 'completed') {
+        displayBuses = displayBuses.filter(b => b.is_completed);
+    } else if (filterVal === 'pending') {
+        displayBuses = displayBuses.filter(b => !b.is_completed);
+    }
+    
+    if (displayBuses.length === 0) {
+        listBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2rem;">查無符合的車輛資料</td></tr>';
+        return;
+    }
+    
+    displayBuses.forEach(b => {
+        const row = document.createElement('tr');
+        
+        const statusBadge = b.is_completed 
+            ? '<span class="badge-status completed">已完成</span>' 
+            : '<span class="badge-status pending">未完成</span>';
+            
+        const timeStr = b.completed_at 
+            ? new Date(b.completed_at).toLocaleString('zh-TW', { 
+                month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false 
+              })
+            : '-';
+            
+        row.innerHTML = `
+            <td style="font-weight: 600; color: var(--primary);">${b.plate_number}</td>
+            <td>${b.vendor_name}</td>
+            <td>${statusBadge}</td>
+            <td>${timeStr}</td>
+            <td>${b.handler_name || '-'}</td>
+        `;
+        listBody.appendChild(row);
+    });
+}
+
+function updateRadialChart(ratio) {
+    const container = document.querySelector("#stats-radial-chart");
+    if (!container) return;
+
+    const options = {
+        series: [ratio],
+        chart: {
+            height: 280,
+            type: 'radialBar',
+            background: 'transparent'
+        },
+        plotOptions: {
+            radialBar: {
+                hollow: {
+                    size: '70%',
+                },
+                dataLabels: {
+                    name: {
+                        show: true,
+                        color: '#94a3b8',
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        offsetY: -10
+                    },
+                    value: {
+                        show: true,
+                        color: '#ffffff',
+                        fontSize: '30px',
+                        fontWeight: 700,
+                        offsetY: 5,
+                        formatter: function (val) {
+                            return val + "%";
+                        }
+                    }
+                },
+                track: {
+                    background: '#1e293b',
+                    strokeWidth: '97%',
+                }
+            }
+        },
+        colors: ['#3b82f6'],
+        labels: ['已完成修改比例'],
+        theme: { mode: 'dark' }
+    };
+    
+    if (statsRadialChart) {
+        statsRadialChart.destroy();
+    }
+    
+    container.innerHTML = '';
+    statsRadialChart = new ApexCharts(container, options);
+    statsRadialChart.render();
 }

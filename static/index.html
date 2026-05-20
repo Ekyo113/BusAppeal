@@ -46,6 +46,7 @@
             <button class="tab-btn active" onclick="switchTab('tab-reports')">通報管理</button>
             <button class="tab-btn" onclick="switchTab('tab-gps')">車輛每日紀錄</button>
             <button class="tab-btn" onclick="switchTab('tab-plans')">營運方案分析</button>
+            <button class="tab-btn" onclick="switchTab('tab-stats')">設計修改統計</button>
         </div>
  
         <main>
@@ -138,6 +139,98 @@
  
                     <div id="plans-container" class="plans-list">
                         <!-- Plans cards will be injected here -->
+                    </div>
+                </div>
+            </div>
+ 
+            <!-- Tab: Statistics -->
+            <div id="tab-stats" class="tab-content hidden">
+                <div class="stats-section">
+                    <div class="section-header-row">
+                        <h2>📊 設計修改項目完成度統計</h2>
+                    </div>
+                    
+                    <div class="stats-controls-grid">
+                        <div class="control-card">
+                            <label class="control-label">🛠️ 修改類型 & 方案</label>
+                            <div class="control-inputs">
+                                <select id="stats-solution-type" onchange="onStatsTypeChange()" class="select-input">
+                                    <!-- Types will be populated by JS -->
+                                </select>
+                                <select id="stats-solution" onchange="calculateStats()" class="select-input">
+                                    <option value="">選擇處理方案...</option>
+                                    <!-- Solutions will be populated by JS -->
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="control-card">
+                            <label class="control-label">🚌 選擇客運商 (可複選)</label>
+                            <div class="multi-select-container">
+                                <div id="vendor-checkboxes" class="checkbox-grid">
+                                    <!-- Checkboxes will be populated by JS -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Statistics Summary Grid -->
+                    <div class="stats-summary-grid">
+                        <div class="summary-card">
+                            <div class="summary-icon">🚌</div>
+                            <div class="summary-details">
+                                <span class="summary-label">車輛總數</span>
+                                <span id="stats-total-buses" class="summary-value">0</span>
+                            </div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-icon">✅</div>
+                            <div class="summary-details">
+                                <span class="summary-label">已完成修改車數</span>
+                                <span id="stats-completed-buses" class="summary-value">0</span>
+                            </div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-icon">📈</div>
+                            <div class="summary-details">
+                                <span class="summary-label">完成比例</span>
+                                <span id="stats-ratio" class="summary-value">0%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Visual Progress Area -->
+                    <div class="progress-visualization">
+                        <div class="chart-box">
+                            <div id="stats-radial-chart"></div>
+                        </div>
+                        <div class="detail-list-box">
+                            <h3>📋 車輛明細清單</h3>
+                            <div class="search-box-row">
+                                <input type="text" id="stats-bus-search" placeholder="搜尋車號..." oninput="renderStatsBusesTable()" class="search-input">
+                                <div class="filter-radio-group">
+                                    <label><input type="radio" name="stats-filter" value="all" checked onchange="renderStatsBusesTable()"> 全部</label>
+                                    <label><input type="radio" name="stats-filter" value="completed" onchange="renderStatsBusesTable()"> 已完成</label>
+                                    <label><input type="radio" name="stats-filter" value="pending" onchange="renderStatsBusesTable()"> 未完成</label>
+                                </div>
+                            </div>
+                            <div class="stats-table-container">
+                                <table class="stats-table">
+                                    <thead>
+                                        <tr>
+                                            <th>車號</th>
+                                            <th>客運商</th>
+                                            <th>狀態</th>
+                                            <th>處理時間</th>
+                                            <th>處理人</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="stats-bus-list">
+                                        <!-- Will be populated by JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
