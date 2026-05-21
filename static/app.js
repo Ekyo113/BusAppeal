@@ -1491,16 +1491,67 @@ function updateRadialChart(ratio) {
 // 導出報表分頁邏輯 (Tab: Export Reports)
 // ==========================================================================
 function loadExportTab() {
-    const completedReports = allReports.filter(r => r.status === '已完成');
+    const startDateEl = document.getElementById('export-start-date');
+    const endDateEl = document.getElementById('export-end-date');
     
-    // 若尚未初始化，預設將所有已完成的通報加入選取清單中 (全選)
+    if (startDateEl && !startDateEl.value) {
+        const now = new Date();
+        const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+        const yyyy = firstDay.getFullYear();
+        const mm = String(firstDay.getMonth() + 1).padStart(2, '0');
+        startDateEl.value = `${yyyy}-${mm}-01`;
+    }
+    if (endDateEl && !endDateEl.value) {
+        const now = new Date();
+        const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        const yyyy = lastDay.getFullYear();
+        const mm = String(lastDay.getMonth() + 1).padStart(2, '0');
+        const dd = String(lastDay.getDate()).padStart(2, '0');
+        endDateEl.value = `${yyyy}-${mm}-${dd}`;
+    }
+
     if (!exportInitialized) {
-        selectedExportIds.clear();
-        completedReports.forEach(r => selectedExportIds.add(r.id));
+        resetExportSelection();
         exportInitialized = true;
     }
     
     renderExportTable();
+}
+
+function onExportFilterChange() {
+    resetExportSelection();
+    renderExportTable();
+}
+
+function resetExportSelection() {
+    selectedExportIds.clear();
+    
+    const start = document.getElementById('export-start-date').value;
+    const end = document.getElementById('export-end-date').value;
+    const showReplace = document.getElementById('export-filter-replace').checked;
+    const showRepair = document.getElementById('export-filter-repair').checked;
+    const showDesign = document.getElementById('export-filter-design').checked;
+    
+    allReports.forEach(r => {
+        if (r.status !== '已完成') return;
+        
+        // Date check
+        if (r.completed_at) {
+            const completedDate = r.completed_at.slice(0, 10);
+            if (start && completedDate < start) return;
+            if (end && completedDate > end) return;
+        } else {
+            return;
+        }
+        
+        // Type check
+        const type = r.solution_type;
+        if (type === '更換' && !showReplace) return;
+        if (type === '維修' && !showRepair) return;
+        if (type === '設計修改' && !showDesign) return;
+        
+        selectedExportIds.add(r.id);
+    });
 }
 
 function renderExportTable() {
@@ -1508,22 +1559,30 @@ function renderExportTable() {
     const selectedCountEl = document.getElementById('export-selected-count');
     if (!listBody || !selectedCountEl) return;
     
-    // 獲取篩選核取方塊的狀態
+    const start = document.getElementById('export-start-date').value;
+    const end = document.getElementById('export-end-date').value;
     const showReplace = document.getElementById('export-filter-replace').checked;
     const showRepair = document.getElementById('export-filter-repair').checked;
     const showDesign = document.getElementById('export-filter-design').checked;
     
-    // 篩選出符合勾選類型的已完成通報紀錄
+    // 篩選出符合日期與勾選類型的已完成通報紀錄
     const displayReports = allReports.filter(r => {
         if (r.status !== '已完成') return false;
+        
+        if (r.completed_at) {
+            const completedDate = r.completed_at.slice(0, 10);
+            if (start && completedDate < start) return false;
+            if (end && completedDate > end) return false;
+        } else {
+            return false;
+        }
         
         const type = r.solution_type;
         if (type === '更換') return showReplace;
         if (type === '維修') return showRepair;
         if (type === '設計修改') return showDesign;
         
-        // 若通報無類型，預設也隨篩選顯示（或是預設均為 true）
-        return true;
+        return false;
     });
     
     // 排序：完成時間由新到舊
@@ -1532,7 +1591,7 @@ function renderExportTable() {
     listBody.innerHTML = '';
     
     if (displayReports.length === 0) {
-        listBody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2rem;">查無符合篩選條件的已完成通報紀錄</td></tr>';
+        listBody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2rem;">所選日期區間與類型查無已完成通報紀錄</td></tr>';
         selectedCountEl.innerText = '0';
         return;
     }
@@ -1573,7 +1632,7 @@ function renderExportTable() {
     // 同步導出 Master Checkbox 狀態
     const masterCheckbox = document.getElementById('export-select-all');
     if (masterCheckbox) {
-        const allVisibleChecked = displayReports.every(r => selectedExportIds.has(r.id));
+        const allVisibleChecked = displayReports.length > 0 && displayReports.every(r => selectedExportIds.has(r.id));
         const someVisibleChecked = displayReports.some(r => selectedExportIds.has(r.id));
         masterCheckbox.checked = allVisibleChecked;
         masterCheckbox.indeterminate = someVisibleChecked && !allVisibleChecked;
@@ -1593,17 +1652,28 @@ function toggleExportItem(el) {
 function toggleAllExportItems(masterEl) {
     const checked = masterEl.checked;
     
+    const start = document.getElementById('export-start-date').value;
+    const end = document.getElementById('export-end-date').value;
     const showReplace = document.getElementById('export-filter-replace').checked;
     const showRepair = document.getElementById('export-filter-repair').checked;
     const showDesign = document.getElementById('export-filter-design').checked;
     
     const displayReports = allReports.filter(r => {
         if (r.status !== '已完成') return false;
+        
+        if (r.completed_at) {
+            const completedDate = r.completed_at.slice(0, 10);
+            if (start && completedDate < start) return false;
+            if (end && completedDate > end) return false;
+        } else {
+            return false;
+        }
+        
         const type = r.solution_type;
         if (type === '更換') return showReplace;
         if (type === '維修') return showRepair;
         if (type === '設計修改') return showDesign;
-        return true;
+        return false;
     });
     
     displayReports.forEach(r => {
@@ -1621,7 +1691,8 @@ async function triggerCustomExport(format) {
     const token = document.getElementById('admin-token').value;
     if (!token) return;
     
-    // 我們只導出目前已選中「且」符合當下篩選類型顯示的項目
+    const start = document.getElementById('export-start-date').value;
+    const end = document.getElementById('export-end-date').value;
     const showReplace = document.getElementById('export-filter-replace').checked;
     const showRepair = document.getElementById('export-filter-repair').checked;
     const showDesign = document.getElementById('export-filter-design').checked;
@@ -1630,11 +1701,19 @@ async function triggerCustomExport(format) {
         if (r.status !== '已完成') return false;
         if (!selectedExportIds.has(r.id)) return false;
         
+        if (r.completed_at) {
+            const completedDate = r.completed_at.slice(0, 10);
+            if (start && completedDate < start) return false;
+            if (end && completedDate > end) return false;
+        } else {
+            return false;
+        }
+        
         const type = r.solution_type;
         if (type === '更換') return showReplace;
         if (type === '維修') return showRepair;
         if (type === '設計修改') return showDesign;
-        return true;
+        return false;
     });
     
     if (targetReports.length === 0) {
@@ -1773,23 +1852,67 @@ async function triggerCustomExport(format) {
 let qualityChart = null;
 
 async function loadQualityStats() {
-    // 1. 取得目前月份字串 (格式: YYYY-MM)
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth(); // 0-11
-    const yearMonthStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
+    // 1. 初始化日期區間為當月 (如尚未設定)
+    const startDateEl = document.getElementById('quality-start-date');
+    const endDateEl = document.getElementById('quality-end-date');
     
-    // 更新標題為當前月份
-    const titleEl = document.getElementById('quality-title-month');
-    if (titleEl) {
-        titleEl.innerText = `📊 品情統計 (${currentYear}年${currentMonth + 1}月)`;
+    if (startDateEl && !startDateEl.value) {
+        const now = new Date();
+        const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+        const yyyy = firstDay.getFullYear();
+        const mm = String(firstDay.getMonth() + 1).padStart(2, '0');
+        startDateEl.value = `${yyyy}-${mm}-01`;
+    }
+    if (endDateEl && !endDateEl.value) {
+        const now = new Date();
+        const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        const yyyy = lastDay.getFullYear();
+        const mm = String(lastDay.getMonth() + 1).padStart(2, '0');
+        const dd = String(lastDay.getDate()).padStart(2, '0');
+        endDateEl.value = `${yyyy}-${mm}-${dd}`;
     }
 
-    // 2. 篩選本月且類型為更換或維修的通報
+    const start = startDateEl ? startDateEl.value : '';
+    const end = endDateEl ? endDateEl.value : '';
+
+    // 取得類型勾選狀態
+    const showReplace = document.getElementById('quality-type-replace').checked;
+    const showRepair = document.getElementById('quality-type-repair').checked;
+    const showDesign = document.getElementById('quality-type-design').checked;
+
+    // 更新標題與說明文字
+    const titleEl = document.getElementById('quality-title-month');
+    if (titleEl) {
+        if (start && end) {
+            titleEl.innerText = `📊 品情統計 (${start} ~ ${end})`;
+        } else {
+            titleEl.innerText = `📊 品情統計`;
+        }
+    }
+
+    const descEl = document.querySelector('#tab-quality .text-muted');
+    if (descEl) {
+        const activeTypes = [];
+        if (showReplace) activeTypes.push('更換');
+        if (showRepair) activeTypes.push('維修');
+        if (showDesign) activeTypes.push('設計修改');
+        const typeStr = activeTypes.length > 0 ? activeTypes.join('、') : '無';
+        descEl.innerText = `統計範圍：${start || '不限'} 至 ${end || '不限'}，統計類型為「${typeStr}」之案件。`;
+    }
+
+    // 2. 篩選符合日期與類型的通報
     const filtered = allReports.filter(r => {
         const dateStr = r.completed_at || r.created_at;
-        if (!dateStr || !dateStr.startsWith(yearMonthStr)) return false;
-        return r.solution_type === '更換' || r.solution_type === '維修';
+        if (!dateStr) return false;
+        const datePart = dateStr.slice(0, 10);
+        if (start && datePart < start) return false;
+        if (end && datePart > end) return false;
+
+        const type = r.solution_type;
+        if (type === '更換') return showReplace;
+        if (type === '維修') return showRepair;
+        if (type === '設計修改') return showDesign;
+        return false;
     });
 
     // 3. 定義部件選項清單 (用於堆疊圖 Series)
@@ -1822,6 +1945,7 @@ async function loadQualityStats() {
                 vendor: vendor,
                 replaceCount: 0,
                 repairCount: 0,
+                designCount: 0,
                 totalCount: 0,
                 componentCounts: {}
             };
@@ -1834,6 +1958,8 @@ async function loadQualityStats() {
             vendorStats[vendor].replaceCount++;
         } else if (r.solution_type === '維修') {
             vendorStats[vendor].repairCount++;
+        } else if (r.solution_type === '設計修改') {
+            vendorStats[vendor].designCount++;
         }
         vendorStats[vendor].totalCount++;
         vendorStats[vendor].componentCounts[comp]++;
@@ -1848,7 +1974,7 @@ async function loadQualityStats() {
     if (tableBody) {
         tableBody.innerHTML = '';
         if (vendorArray.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 2rem;">本月查無維修或更換紀錄</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2rem;">所選日期區間與類型查無通報紀錄</td></tr>';
         } else {
             vendorArray.forEach(v => {
                 const tr = document.createElement('tr');
@@ -1856,6 +1982,7 @@ async function loadQualityStats() {
                     <td style="font-weight: 600;">${v.vendor}</td>
                     <td style="text-align: center;">${v.replaceCount}</td>
                     <td style="text-align: center;">${v.repairCount}</td>
+                    <td style="text-align: center;">${v.designCount}</td>
                     <td style="text-align: center; color: var(--primary); font-weight: bold;">${v.totalCount}</td>
                 `;
                 tableBody.appendChild(tr);
@@ -1868,7 +1995,7 @@ async function loadQualityStats() {
     if (!chartContainer) return;
 
     if (vendorArray.length === 0) {
-        chartContainer.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 5rem 0; font-size: 0.95rem;">本月尚無通報統計資料，無法產生圖表。</div>';
+        chartContainer.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 5rem 0; font-size: 0.95rem;">所選條件尚無通報統計資料，無法產生圖表。</div>';
         if (qualityChart) {
             qualityChart.destroy();
             qualityChart = null;

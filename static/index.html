@@ -265,17 +265,25 @@
                         </div>
                         
                         <div class="filter-card" style="padding: 1.2rem; background: var(--surface-light); border: 1px solid var(--border); border-radius: 12px; width: 100%; display: flex; flex-direction: column; gap: 1rem;">
+                            <div style="border-top: none; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border);">
+                                <span class="control-label" style="font-weight: bold; color: var(--primary); display: block; margin-bottom: 0.5rem;">📅 篩選日期區間</span>
+                                <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                    <input type="date" id="export-start-date" style="padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: white;" onchange="onExportFilterChange()">
+                                    <span style="color: var(--text-muted);">至</span>
+                                    <input type="date" id="export-end-date" style="padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: white;" onchange="onExportFilterChange()">
+                                </div>
+                            </div>
                             <div>
                                 <span class="control-label" style="font-weight: bold; color: var(--primary); display: block; margin-bottom: 0.5rem;">🔍 篩選維修/修改類型</span>
                                 <div style="display: flex; gap: 1.5rem; flex-wrap: wrap;">
                                     <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; color: white;">
-                                        <input type="checkbox" id="export-filter-replace" checked onchange="renderExportTable()"> 更換
+                                        <input type="checkbox" id="export-filter-replace" checked onchange="onExportFilterChange()"> 更換
                                     </label>
                                     <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; color: white;">
-                                        <input type="checkbox" id="export-filter-repair" checked onchange="renderExportTable()"> 維修
+                                        <input type="checkbox" id="export-filter-repair" checked onchange="onExportFilterChange()"> 維修
                                     </label>
                                     <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; color: white;">
-                                        <input type="checkbox" id="export-filter-design" checked onchange="renderExportTable()"> 設計修改
+                                        <input type="checkbox" id="export-filter-design" checked onchange="onExportFilterChange()"> 設計修改
                                     </label>
                                 </div>
                             </div>
@@ -331,8 +339,32 @@
             <div id="tab-quality" class="tab-content hidden">
                 <div class="stats-header" style="margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center;">
                     <div>
-                        <h2 id="quality-title-month">📊 品情統計 (本月)</h2>
-                        <p class="text-muted" style="font-size: 0.9rem; margin-top: 0.25rem;">統計範圍：僅引用本月 (當前月份) 之通報紀錄，僅統計「更換」與「維修」類型之案件。</p>
+                        <h2 id="quality-title-month">📊 品情統計</h2>
+                        <p class="text-muted" style="font-size: 0.9rem; margin-top: 0.25rem;">統計範圍：載入中...</p>
+                    </div>
+                </div>
+
+                <div class="quality-filters" style="display: flex; gap: 1.5rem; align-items: center; flex-wrap: wrap; background: var(--surface-light); border: 1px solid var(--border); padding: 1rem; border-radius: 12px; margin-bottom: 1.5rem;">
+                    <!-- Date Pickers -->
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span style="font-size: 0.9rem; color: var(--primary); font-weight: bold;">📅 日期區間：</span>
+                        <input type="date" id="quality-start-date" style="padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: white;" onchange="loadQualityStats()">
+                        <span style="color: var(--text-muted);">至</span>
+                        <input type="date" id="quality-end-date" style="padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: white;" onchange="loadQualityStats()">
+                    </div>
+                    
+                    <!-- Checkboxes -->
+                    <div style="display: flex; align-items: center; gap: 1rem; border-left: 1px solid var(--border); padding-left: 1.5rem; flex-wrap: wrap;">
+                        <span style="font-size: 0.9rem; color: var(--primary); font-weight: bold;">🔍 通報類型：</span>
+                        <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.9rem; cursor: pointer; color: var(--text);">
+                            <input type="checkbox" id="quality-type-replace" checked onchange="loadQualityStats()"> 更換
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.9rem; cursor: pointer; color: var(--text);">
+                            <input type="checkbox" id="quality-type-repair" checked onchange="loadQualityStats()"> 維修
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.9rem; cursor: pointer; color: var(--text);">
+                            <input type="checkbox" id="quality-type-design" onchange="loadQualityStats()"> 設計修改
+                        </label>
                     </div>
                 </div>
 
@@ -348,7 +380,7 @@
                     <!-- Right: Table showing cumulative replace + repair counts -->
                     <div class="detail-list-box" style="background: var(--surface); border: 1px solid var(--border); padding: 1.5rem; border-radius: 12px;">
                         <h3 style="margin-bottom: 1.5rem; color: white; display: flex; align-items: center; gap: 0.5rem;">
-                            📋 客運商累計件數 (更換 + 維修)
+                            📋 客運商累計件數
                         </h3>
                         <div class="stats-table-container" style="max-height: 450px; overflow-y: auto;">
                             <table class="stats-table">
@@ -357,6 +389,7 @@
                                         <th>客運商</th>
                                         <th style="text-align: center;">更換件數</th>
                                         <th style="text-align: center;">維修件數</th>
+                                        <th style="text-align: center;">設計修改</th>
                                         <th style="text-align: center; color: var(--primary); font-weight: bold;">總累計</th>
                                     </tr>
                                 </thead>
