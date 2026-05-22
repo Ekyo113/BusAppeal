@@ -332,6 +332,12 @@ main {
     color: #38bdf8;
     border: 1px solid rgba(14, 165, 233, 0.3);
 }
+.sol-type-label.sol-aftersales {
+    background: rgba(139, 92, 246, 0.15);
+    color: #a78bfa;
+    border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
 
 
 /* Table Actions */

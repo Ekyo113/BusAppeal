@@ -171,6 +171,23 @@ async def handle_group_message(event, sender_user_id: str, group_id: str, text: 
     async with AsyncApiClient(configuration) as api_client:
         line_bot_api = AsyncMessagingApi(api_client)
 
+        if text.strip() == "待處理":
+            pending = Database.get_all_pending_reports()
+            if not pending:
+                reply = "📝 目前無待處理的通報項目。"
+            else:
+                reply_lines = ["📋 待處理通報清單："]
+                for i, r in enumerate(pending, 1):
+                    car = r.get("car_number", "未知車號")
+                    desc = r.get("description", "無描述")
+                    reply_lines.append(f"{i}. {car}：{desc}")
+                reply = "\n".join(reply_lines)
+            await line_bot_api.reply_message(ReplyMessageRequest(
+                reply_token=event.reply_token,
+                messages=[TextMessage(text=reply)]
+            ))
+            return
+
         parsed_items = await ai_service.parse_group_message(text)
 
         if not parsed_items:

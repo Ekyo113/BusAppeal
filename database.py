@@ -157,6 +157,24 @@ class Database:
             return []
 
     @classmethod
+    def get_all_pending_reports(cls) -> list:
+        """查詢所有未完成的通報（狀態不為「已完成」）"""
+        client = cls.get_client()
+        try:
+            response = (
+                client.table("reports")
+                .select("id, car_number, description, status, created_at")
+                .neq("status", "已完成")
+                .order("created_at", desc=False)
+                .execute()
+            )
+            return response.data
+        except Exception as e:
+            print(f"Database Error in get_all_pending_reports: {e}")
+            return []
+
+
+    @classmethod
     def update_report_solution(cls, report_id: str, solution: str, mileage: str = None,
                                 handler_id: str = None, handler_name: str = "市場組",
                                 solution_type: str = None):

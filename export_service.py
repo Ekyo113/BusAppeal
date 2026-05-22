@@ -165,6 +165,8 @@ class ExportService:
     @staticmethod
     def generate_excel(reports, content_field="solution"):
         """產生 Excel XLSX 檔案，若未安裝 openpyxl 則自動降級為帶有 UTF-8 BOM 的 CSV 檔案"""
+        # 依日期由遠到近（建立/完成時間遞增）排序
+        reports = sorted(reports, key=lambda r: r.get('completed_at') or r.get('created_at') or '')
         try:
             import openpyxl
             from openpyxl.styles import Font, Alignment, PatternFill, Border, Side

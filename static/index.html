@@ -42,6 +42,10 @@
                         🟢 已完成: <span id="count-done">0</span>
                     </span>
                 </div>
+                <select id="done-stats-range" onchange="updateStats()" style="background: var(--surface-light); border: 1px solid var(--border); color: white; padding: 0.35rem 0.5rem; border-radius: 6px; font-size: 0.85rem; margin-right: 0.5rem; outline: none; cursor: pointer;">
+                    <option value="month">本月</option>
+                    <option value="all" selected>累計</option>
+                </select>
                 <select id="reports-sort-by" onchange="renderReports()" style="background: var(--surface-light); border: 1px solid var(--border); color: white; padding: 0.35rem 0.5rem; border-radius: 6px; font-size: 0.85rem; margin-right: 0.5rem; outline: none; cursor: pointer;">
                     <option value="created_at">排序：建立時間</option>
                     <option value="car_number">排序：車牌號碼</option>
@@ -81,6 +85,9 @@
                             </label>
                             <label style="display: flex; align-items: center; gap: 0.25rem; font-size: 0.8rem; cursor: pointer; color: var(--text);">
                                 <input type="checkbox" id="filter-type-design" checked onchange="saveTypeFilterState(); renderReports();"> 設計修改
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.25rem; font-size: 0.8rem; cursor: pointer; color: var(--text);">
+                                <input type="checkbox" id="filter-type-aftersales" checked onchange="saveTypeFilterState(); renderReports();"> 售服
                             </label>
                             <label style="display: flex; align-items: center; gap: 0.25rem; font-size: 0.8rem; cursor: pointer; color: var(--text);">
                                 <input type="checkbox" id="filter-type-other" checked onchange="saveTypeFilterState(); renderReports();"> 未分類
@@ -285,6 +292,9 @@
                                     <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; color: white;">
                                         <input type="checkbox" id="export-filter-design" checked onchange="onExportFilterChange()"> 設計修改
                                     </label>
+                                    <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; color: white;">
+                                        <input type="checkbox" id="export-filter-aftersales" checked onchange="onExportFilterChange()"> 售服
+                                    </label>
                                 </div>
                             </div>
                             <div style="border-top: 1px solid var(--border); padding-top: 0.75rem;">
@@ -357,14 +367,17 @@
                     <div style="display: flex; align-items: center; gap: 1rem; border-left: 1px solid var(--border); padding-left: 1.5rem; flex-wrap: wrap;">
                         <span style="font-size: 0.9rem; color: var(--primary); font-weight: bold;">🔍 通報類型：</span>
                         <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.9rem; cursor: pointer; color: var(--text);">
-                            <input type="checkbox" id="quality-type-replace" checked onchange="loadQualityStats()"> 更換
-                        </label>
-                        <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.9rem; cursor: pointer; color: var(--text);">
-                            <input type="checkbox" id="quality-type-repair" checked onchange="loadQualityStats()"> 維修
-                        </label>
-                        <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.9rem; cursor: pointer; color: var(--text);">
-                            <input type="checkbox" id="quality-type-design" onchange="loadQualityStats()"> 設計修改
-                        </label>
+                                            <input type="checkbox" id="quality-type-replace" checked onchange="loadQualityStats()"> 更換
+                                        </label>
+                                        <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.9rem; cursor: pointer; color: var(--text);">
+                                            <input type="checkbox" id="quality-type-repair" checked onchange="loadQualityStats()"> 維修
+                                        </label>
+                                        <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.9rem; cursor: pointer; color: var(--text);">
+                                            <input type="checkbox" id="quality-type-design" onchange="loadQualityStats()"> 設計修改
+                                        </label>
+                                        <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.9rem; cursor: pointer; color: var(--text);">
+                                            <input type="checkbox" id="quality-type-aftersales" checked onchange="loadQualityStats()"> 售服
+                                        </label>
                     </div>
                 </div>
 
@@ -377,27 +390,12 @@
                         <div id="quality-stacked-chart" style="width: 100%;"></div>
                     </div>
 
-                    <!-- Right: Table showing cumulative replace + repair counts -->
-                    <div class="detail-list-box" style="background: var(--surface); border: 1px solid var(--border); padding: 1.5rem; border-radius: 12px;">
+                    <!-- Right: Component Cumulative Count Chart (Horizontal Bar Chart) -->
+                    <div class="detail-list-box" style="background: var(--surface); border: 1px solid var(--border); padding: 1.5rem; border-radius: 12px; min-height: 450px;">
                         <h3 style="margin-bottom: 1.5rem; color: white; display: flex; align-items: center; gap: 0.5rem;">
-                            📋 客運商累計件數
+                            📈 各部件累計數量 (橫條圖)
                         </h3>
-                        <div class="stats-table-container" style="max-height: 450px; overflow-y: auto;">
-                            <table class="stats-table">
-                                <thead>
-                                    <tr>
-                                        <th>客運商</th>
-                                        <th style="text-align: center;">更換件數</th>
-                                        <th style="text-align: center;">維修件數</th>
-                                        <th style="text-align: center;">設計修改</th>
-                                        <th style="text-align: center; color: var(--primary); font-weight: bold;">總累計</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="quality-vendor-table-body">
-                                    <!-- Will be populated by JS -->
-                                </tbody>
-                            </table>
-                        </div>
+                        <div id="quality-component-chart" style="width: 100%;"></div>
                     </div>
                 </div>
             </div>

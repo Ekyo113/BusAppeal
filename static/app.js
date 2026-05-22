@@ -74,6 +74,7 @@ function saveTypeFilterState() {
         localStorage.setItem('report_type_filter_replace', document.getElementById('filter-type-replace').checked);
         localStorage.setItem('report_type_filter_repair', document.getElementById('filter-type-repair').checked);
         localStorage.setItem('report_type_filter_design', document.getElementById('filter-type-design').checked);
+        localStorage.setItem('report_type_filter_aftersales', document.getElementById('filter-type-aftersales').checked);
         localStorage.setItem('report_type_filter_other', document.getElementById('filter-type-other').checked);
     }
 }
@@ -83,6 +84,7 @@ function restoreTypeFilterState() {
         document.getElementById('filter-type-replace').checked = localStorage.getItem('report_type_filter_replace') !== 'false';
         document.getElementById('filter-type-repair').checked = localStorage.getItem('report_type_filter_repair') !== 'false';
         document.getElementById('filter-type-design').checked = localStorage.getItem('report_type_filter_design') !== 'false';
+        document.getElementById('filter-type-aftersales').checked = localStorage.getItem('report_type_filter_aftersales') !== 'false';
         document.getElementById('filter-type-other').checked = localStorage.getItem('report_type_filter_other') !== 'false';
     }
 }
@@ -94,6 +96,7 @@ function renderReports() {
     const showReplace = document.getElementById('filter-type-replace') ? document.getElementById('filter-type-replace').checked : true;
     const showRepair = document.getElementById('filter-type-repair') ? document.getElementById('filter-type-repair').checked : true;
     const showDesign = document.getElementById('filter-type-design') ? document.getElementById('filter-type-design').checked : true;
+    const showAfterSales = document.getElementById('filter-type-aftersales') ? document.getElementById('filter-type-aftersales').checked : true;
     const showOther = document.getElementById('filter-type-other') ? document.getElementById('filter-type-other').checked : true;
 
     const filteredReports = allReports.filter(r => {
@@ -105,6 +108,7 @@ function renderReports() {
         if (type === '更換') return showReplace;
         if (type === '維修') return showRepair;
         if (type === '設計修改') return showDesign;
+        if (type === '售服') return showAfterSales;
         if (!type || type.trim() === '') return showOther;
         return true;
     });
@@ -165,7 +169,7 @@ function renderReports() {
         }) : '-';
 
         const solType = report.solution_type || '-';
-        const solTypeClass = report.solution_type === '更換' ? 'sol-replace' : report.solution_type === '維修' ? 'sol-repair' : '';
+        const solTypeClass = report.solution_type === '更換' ? 'sol-replace' : report.solution_type === '維修' ? 'sol-repair' : report.solution_type === '售服' ? 'sol-aftersales' : '';
 
         row.innerHTML = `
             <td class="row-index">${index + 1}</td>
@@ -254,6 +258,7 @@ function viewDetail(id) {
                         <option value="維修" ${report.solution_type === '維修' ? 'selected' : ''}>維修</option>
                         <option value="更換" ${report.solution_type === '更換' ? 'selected' : ''}>更換</option>
                         <option value="設計修改" ${report.solution_type === '設計修改' ? 'selected' : ''}>設計修改</option>
+                        <option value="售服" ${report.solution_type === '售服' ? 'selected' : ''}>售服</option>
                     </select>
                 </div>
             </div>
@@ -422,7 +427,18 @@ function updateStats() {
     const countInProgressEl = document.getElementById('count-in-progress');
     if (countInProgressEl) countInProgressEl.innerText = allReports.filter(r => r.status === '維修中').length;
     const countDoneEl = document.getElementById('count-done');
-    if (countDoneEl) countDoneEl.innerText = allReports.filter(r => r.status === '已完成').length;
+    if (countDoneEl) {
+        const statsRange = document.getElementById('done-stats-range') ? document.getElementById('done-stats-range').value : 'all';
+        if (statsRange === 'month') {
+            const now = new Date();
+            const yyyy = now.getFullYear();
+            const mm = String(now.getMonth() + 1).padStart(2, '0');
+            const thisMonthPrefix = `${yyyy}-${mm}`;
+            countDoneEl.innerText = allReports.filter(r => r.status === '已完成' && r.completed_at && r.completed_at.startsWith(thisMonthPrefix)).length;
+        } else {
+            countDoneEl.innerText = allReports.filter(r => r.status === '已完成').length;
+        }
+    }
     
     // 同步更新統計分頁數據
     if (monitoredBuses && monitoredBuses.length > 0) {
@@ -1184,8 +1200,8 @@ function populateStatsSolutionTypes() {
     // 從現有通報單撈取所有的 solution_type 類型
     let types = [...new Set(allReports.map(r => r.solution_type).filter(Boolean))];
     
-    // 預設一定要有這三種基本類型
-    const defaults = ['設計修改', '維修', '更換'];
+    // 預設一定要有這四種基本類型
+    const defaults = ['設計修改', '維修', '更換', '售服'];
     defaults.forEach(d => {
         if (!types.includes(d)) {
             types.push(d);
@@ -1531,6 +1547,7 @@ function resetExportSelection() {
     const showReplace = document.getElementById('export-filter-replace').checked;
     const showRepair = document.getElementById('export-filter-repair').checked;
     const showDesign = document.getElementById('export-filter-design').checked;
+    const showAfterSales = document.getElementById('export-filter-aftersales') ? document.getElementById('export-filter-aftersales').checked : true;
     
     allReports.forEach(r => {
         if (r.status !== '已完成') return;
@@ -1549,6 +1566,7 @@ function resetExportSelection() {
         if (type === '更換' && !showReplace) return;
         if (type === '維修' && !showRepair) return;
         if (type === '設計修改' && !showDesign) return;
+        if (type === '售服' && !showAfterSales) return;
         
         selectedExportIds.add(r.id);
     });
@@ -1564,6 +1582,7 @@ function renderExportTable() {
     const showReplace = document.getElementById('export-filter-replace').checked;
     const showRepair = document.getElementById('export-filter-repair').checked;
     const showDesign = document.getElementById('export-filter-design').checked;
+    const showAfterSales = document.getElementById('export-filter-aftersales') ? document.getElementById('export-filter-aftersales').checked : true;
     
     // 篩選出符合日期與勾選類型的已完成通報紀錄
     const displayReports = allReports.filter(r => {
@@ -1581,6 +1600,7 @@ function renderExportTable() {
         if (type === '更換') return showReplace;
         if (type === '維修') return showRepair;
         if (type === '設計修改') return showDesign;
+        if (type === '售服') return showAfterSales;
         
         return false;
     });
@@ -1608,7 +1628,7 @@ function renderExportTable() {
               })
             : '-';
             
-        const solTypeClass = r.solution_type === '更換' ? 'sol-replace' : r.solution_type === '維修' ? 'sol-repair' : '';
+        const solTypeClass = r.solution_type === '更換' ? 'sol-replace' : r.solution_type === '維修' ? 'sol-repair' : r.solution_type === '售服' ? 'sol-aftersales' : '';
             
         const row = document.createElement('tr');
         row.innerHTML = `
@@ -1657,6 +1677,7 @@ function toggleAllExportItems(masterEl) {
     const showReplace = document.getElementById('export-filter-replace').checked;
     const showRepair = document.getElementById('export-filter-repair').checked;
     const showDesign = document.getElementById('export-filter-design').checked;
+    const showAfterSales = document.getElementById('export-filter-aftersales') ? document.getElementById('export-filter-aftersales').checked : true;
     
     const displayReports = allReports.filter(r => {
         if (r.status !== '已完成') return false;
@@ -1673,6 +1694,7 @@ function toggleAllExportItems(masterEl) {
         if (type === '更換') return showReplace;
         if (type === '維修') return showRepair;
         if (type === '設計修改') return showDesign;
+        if (type === '售服') return showAfterSales;
         return false;
     });
     
@@ -1696,6 +1718,7 @@ async function triggerCustomExport(format) {
     const showReplace = document.getElementById('export-filter-replace').checked;
     const showRepair = document.getElementById('export-filter-repair').checked;
     const showDesign = document.getElementById('export-filter-design').checked;
+    const showAfterSales = document.getElementById('export-filter-aftersales') ? document.getElementById('export-filter-aftersales').checked : true;
     
     const targetReports = allReports.filter(r => {
         if (r.status !== '已完成') return false;
@@ -1713,6 +1736,7 @@ async function triggerCustomExport(format) {
         if (type === '更換') return showReplace;
         if (type === '維修') return showRepair;
         if (type === '設計修改') return showDesign;
+        if (type === '售服') return showAfterSales;
         return false;
     });
     
@@ -1850,6 +1874,7 @@ async function triggerCustomExport(format) {
 // 品情統計分頁邏輯 (Tab: Quality Stats)
 // ==========================================================================
 let qualityChart = null;
+let qualityComponentChart = null;
 
 async function loadQualityStats() {
     // 1. 初始化日期區間為當月 (如尚未設定)
@@ -1879,6 +1904,7 @@ async function loadQualityStats() {
     const showReplace = document.getElementById('quality-type-replace').checked;
     const showRepair = document.getElementById('quality-type-repair').checked;
     const showDesign = document.getElementById('quality-type-design').checked;
+    const showAfterSales = document.getElementById('quality-type-aftersales') ? document.getElementById('quality-type-aftersales').checked : true;
 
     // 更新標題與說明文字
     const titleEl = document.getElementById('quality-title-month');
@@ -1896,6 +1922,7 @@ async function loadQualityStats() {
         if (showReplace) activeTypes.push('更換');
         if (showRepair) activeTypes.push('維修');
         if (showDesign) activeTypes.push('設計修改');
+        if (showAfterSales) activeTypes.push('售服');
         const typeStr = activeTypes.length > 0 ? activeTypes.join('、') : '無';
         descEl.innerText = `統計範圍：${start || '不限'} 至 ${end || '不限'}，統計類型為「${typeStr}」之案件。`;
     }
@@ -1912,6 +1939,7 @@ async function loadQualityStats() {
         if (type === '更換') return showReplace;
         if (type === '維修') return showRepair;
         if (type === '設計修改') return showDesign;
+        if (type === '售服') return showAfterSales;
         return false;
     });
 
@@ -1969,139 +1997,235 @@ async function loadQualityStats() {
     const vendorArray = Object.values(vendorStats);
     vendorArray.sort((a, b) => b.totalCount - a.totalCount);
 
-    // 5. 渲染右側表格 (客運商累計件數)
-    const tableBody = document.getElementById('quality-vendor-table-body');
-    if (tableBody) {
-        tableBody.innerHTML = '';
-        if (vendorArray.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2rem;">所選日期區間與類型查無通報紀錄</td></tr>';
-        } else {
-            vendorArray.forEach(v => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td style="font-weight: 600;">${v.vendor}</td>
-                    <td style="text-align: center;">${v.replaceCount}</td>
-                    <td style="text-align: center;">${v.repairCount}</td>
-                    <td style="text-align: center;">${v.designCount}</td>
-                    <td style="text-align: center; color: var(--primary); font-weight: bold;">${v.totalCount}</td>
-                `;
-                tableBody.appendChild(tr);
-            });
-        }
-    }
-
     // 6. 渲染左側 ApexCharts 橫式堆疊圖
     const chartContainer = document.getElementById('quality-stacked-chart');
-    if (!chartContainer) return;
+    if (chartContainer) {
+        if (vendorArray.length === 0) {
+            chartContainer.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 5rem 0; font-size: 0.95rem;">所選條件尚無通報統計資料，無法產生圖表。</div>';
+            if (qualityChart) {
+                qualityChart.destroy();
+                qualityChart = null;
+            }
+        } else {
+            // Y 軸類別：排序後的客運商列表 (Y 軸從高到低，即陣列首項在最上方)
+            const categories = vendorArray.map(v => v.vendor);
 
-    if (vendorArray.length === 0) {
-        chartContainer.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 5rem 0; font-size: 0.95rem;">所選條件尚無通報統計資料，無法產生圖表。</div>';
-        if (qualityChart) {
-            qualityChart.destroy();
-            qualityChart = null;
-        }
-        return;
-    }
+            // X 軸數據：每個部件作為一組 Series，長度與客運商列表相同
+            const series = componentsList.map(comp => {
+                return {
+                    name: comp,
+                    data: vendorArray.map(v => v.componentCounts[comp] || 0)
+                };
+            });
 
-    // Y 軸類別：排序後的客運商列表 (Y 軸從高到低，即陣列首項在最上方)
-    const categories = vendorArray.map(v => v.vendor);
+            // 過濾掉全為 0 的部件，保持圖例乾淨
+            const activeSeries = series.filter(s => s.data.some(val => val > 0));
 
-    // X 軸數據：每個部件作為一組 Series，長度與客運商列表相同
-    const series = componentsList.map(comp => {
-        return {
-            name: comp,
-            data: vendorArray.map(v => v.componentCounts[comp] || 0)
-        };
-    });
-
-    // 過濾掉全為 0 的部件，保持圖例乾淨
-    const activeSeries = series.filter(s => s.data.some(val => val > 0));
-
-    const options = {
-        series: activeSeries.length > 0 ? activeSeries : [{ name: '無資料', data: Array(categories.length).fill(0) }],
-        chart: {
-            type: 'bar',
-            height: Math.max(350, categories.length * 45 + 100), // 動態自適應高度
-            stacked: true,
-            toolbar: { show: true },
-            background: 'transparent'
-        },
-        plotOptions: {
-            bar: {
-                horizontal: true,
-                dataLabels: {
-                    total: {
-                        enabled: true,
-                        offsetX: 8,
-                        style: {
-                            fontSize: '12px',
-                            fontWeight: 900,
-                            colors: ['#fff']
+            const options = {
+                series: activeSeries.length > 0 ? activeSeries : [{ name: '無資料', data: Array(categories.length).fill(0) }],
+                chart: {
+                    type: 'bar',
+                    height: Math.max(350, categories.length * 45 + 100), // 動態自適應高度
+                    stacked: true,
+                    toolbar: { show: true },
+                    background: 'transparent'
+                },
+                plotOptions: {
+                    bar: {
+                        horizontal: true,
+                        dataLabels: {
+                            total: {
+                                enabled: true,
+                                offsetX: 8,
+                                style: {
+                                    fontSize: '12px',
+                                    fontWeight: 900,
+                                    colors: ['#fff']
+                                }
+                            }
                         }
                     }
-                }
-            }
-        },
-        colors: [
-            '#3b82f6', // TMS (藍)
-            '#f59e0b', // 動力 (黃)
-            '#10b981', // BMS (綠)
-            '#0ea5e9', // 冷氣 (淺藍)
-            '#d946ef', // 電子影像 (洋紅)
-            '#ec4899', // 方向燈座 (粉)
-            '#8b5cf6', // 車門 (紫)
-            '#06b6d4', // 車裝 (青)
-            '#ef4444', // 燈光 (紅)
-            '#14b8a6', // 底盤件 (藍綠)
-            '#f97316', // 儀錶 (橘)
-            '#6b7280', // 其他 (灰)
-            '#9ca3af'  // 未分類 (淺灰)
-        ],
-        stroke: {
-            width: 1,
-            colors: ['var(--surface)']
-        },
-        xaxis: {
-            categories: categories,
-            labels: {
-                style: { colors: '#94a3b8', fontSize: '11px' }
-            },
-            title: {
-                text: '案件數量 (件)',
-                style: { color: '#94a3b8', fontSize: '12px' }
-            }
-        },
-        yaxis: {
-            labels: {
-                style: { colors: '#f1f5f9', fontSize: '12px', fontWeight: 'bold' }
-            }
-        },
-        tooltip: {
-            theme: 'dark',
-            y: {
-                formatter: function (val) {
-                    return val + " 件";
-                }
-            }
-        },
-        fill: {
-            opacity: 0.95
-        },
-        legend: {
-            position: 'top',
-            horizontalAlign: 'left',
-            labels: { colors: '#94a3b8' },
-            fontSize: '12px'
-        },
-        theme: { mode: 'dark' }
-    };
+                },
+                colors: [
+                    '#3b82f6', // TMS (藍)
+                    '#f59e0b', // 動力 (黃)
+                    '#10b981', // BMS (綠)
+                    '#0ea5e9', // 冷氣 (淺藍)
+                    '#d946ef', // 電子影像 (洋紅)
+                    '#ec4899', // 方向燈座 (粉)
+                    '#8b5cf6', // 車門 (紫)
+                    '#06b6d4', // 車裝 (青)
+                    '#ef4444', // 燈光 (紅)
+                    '#14b8a6', // 底盤件 (藍綠)
+                    '#f97316', // 儀錶 (橘)
+                    '#6b7280', // 其他 (灰)
+                    '#9ca3af'  // 未分類 (淺灰)
+                ],
+                stroke: {
+                    width: 1,
+                    colors: ['var(--surface)']
+                },
+                xaxis: {
+                    categories: categories,
+                    labels: {
+                        style: { colors: '#94a3b8', fontSize: '11px' }
+                    },
+                    title: {
+                        text: '案件數量 (件)',
+                        style: { color: '#94a3b8', fontSize: '12px' }
+                    }
+                },
+                yaxis: {
+                    labels: {
+                        style: { colors: '#f1f5f9', fontSize: '12px', fontWeight: 'bold' }
+                    }
+                },
+                tooltip: {
+                    theme: 'dark',
+                    y: {
+                        formatter: function (val) {
+                            return val + " 件";
+                        }
+                    }
+                },
+                fill: {
+                    opacity: 0.95
+                },
+                legend: {
+                    position: 'top',
+                    horizontalAlign: 'left',
+                    labels: { colors: '#94a3b8' },
+                    fontSize: '12px'
+                },
+                theme: { mode: 'dark' }
+            };
 
-    if (qualityChart) {
-        qualityChart.destroy();
+            if (qualityChart) {
+                qualityChart.destroy();
+            }
+            chartContainer.innerHTML = '';
+            qualityChart = new ApexCharts(chartContainer, options);
+            qualityChart.render();
+        }
     }
-    chartContainer.innerHTML = '';
-    qualityChart = new ApexCharts(chartContainer, options);
-    qualityChart.render();
+
+    // 7. 渲染右側各部件累計數量 (橫條圖)
+    const compChartContainer = document.getElementById('quality-component-chart');
+    if (compChartContainer) {
+        const componentTotals = {};
+        componentsList.forEach(c => {
+            componentTotals[c] = 0;
+        });
+        filtered.forEach(r => {
+            let comp = (r.component || '').trim();
+            if (!comp) {
+                comp = '未分類';
+            } else if (!componentsList.includes(comp)) {
+                comp = '其他';
+            }
+            componentTotals[comp]++;
+        });
+
+        const componentArray = Object.keys(componentTotals).map(comp => ({
+            name: comp,
+            count: componentTotals[comp]
+        })).filter(c => c.count > 0);
+
+        // 依「件數」從高到低排序
+        componentArray.sort((a, b) => b.count - a.count);
+
+        if (componentArray.length === 0) {
+            compChartContainer.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 5rem 0; font-size: 0.95rem;">所選條件尚無部件統計資料，無法產生圖表。</div>';
+            if (qualityComponentChart) {
+                qualityComponentChart.destroy();
+                qualityComponentChart = null;
+            }
+        } else {
+            const compCategories = componentArray.map(c => c.name);
+            const compData = componentArray.map(c => c.count);
+
+            const compOptions = {
+                series: [{
+                    name: '案件數量',
+                    data: compData
+                }],
+                chart: {
+                    type: 'bar',
+                    height: Math.max(350, compCategories.length * 30 + 80),
+                    toolbar: { show: false },
+                    background: 'transparent'
+                },
+                plotOptions: {
+                    bar: {
+                        horizontal: true,
+                        barHeight: '60%',
+                        borderRadius: 4,
+                        distributed: true,
+                        dataLabels: {
+                            position: 'end'
+                        }
+                    }
+                },
+                colors: [
+                    '#3b82f6', // TMS (藍)
+                    '#f59e0b', // 動力 (黃)
+                    '#10b981', // BMS (綠)
+                    '#0ea5e9', // 冷氣 (淺藍)
+                    '#d946ef', // 電子影像 (洋紅)
+                    '#ec4899', // 方向燈座 (粉)
+                    '#8b5cf6', // 車門 (紫)
+                    '#06b6d4', // 車裝 (青)
+                    '#ef4444', // 燈光 (紅)
+                    '#14b8a6', // 底盤件 (藍綠)
+                    '#f97316', // 儀錶 (橘)
+                    '#6b7280', // 其他 (灰)
+                    '#9ca3af'  // 未分類 (淺灰)
+                ],
+                dataLabels: {
+                    enabled: true,
+                    textAnchor: 'start',
+                    style: {
+                        colors: ['#fff'],
+                        fontWeight: 'bold'
+                    },
+                    formatter: function (val) {
+                        return val + " 件";
+                    },
+                    offsetX: 10
+                },
+                xaxis: {
+                    categories: compCategories,
+                    labels: {
+                        style: { colors: '#94a3b8', fontSize: '11px' }
+                    }
+                },
+                yaxis: {
+                    labels: {
+                        style: { colors: '#f1f5f9', fontSize: '12px', fontWeight: 'bold' }
+                    }
+                },
+                tooltip: {
+                    theme: 'dark',
+                    y: {
+                        formatter: function (val) {
+                            return val + " 件";
+                        }
+                    }
+                },
+                legend: {
+                    show: false
+                },
+                theme: { mode: 'dark' }
+            };
+
+            if (qualityComponentChart) {
+                qualityComponentChart.destroy();
+            }
+            compChartContainer.innerHTML = '';
+            qualityComponentChart = new ApexCharts(compChartContainer, compOptions);
+            qualityComponentChart.render();
+        }
+    }
 }
 
 
