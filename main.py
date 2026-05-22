@@ -152,6 +152,18 @@ async def get_bus_status(city: str = "Kaohsiung", force_a2: bool = False, bypass
         raise HTTPException(status_code=500, detail=f"資料取得失敗: {str(e)}")
 
 
+@app.get("/bus/pending")
+async def get_all_pending_reports(x_map_password: str = Header(None)):
+    """取得所有城市的未完成品情通報（供監控系統的品情待處理清單使用）。"""
+    if not Config.MAP_PASSWORD or x_map_password != Config.MAP_PASSWORD:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    try:
+        return bus_service.fetch_all_pending_reports()
+    except Exception as e:
+        print(f"[/bus/pending] Error: {e}")
+        raise HTTPException(status_code=500, detail=f"無法取得待處理通報: {str(e)}")
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

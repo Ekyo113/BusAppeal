@@ -2162,7 +2162,7 @@ async function loadQualityStats() {
                         borderRadius: 4,
                         distributed: true,
                         dataLabels: {
-                            position: 'end'
+                            position: 'top'
                         }
                     }
                 },
@@ -2183,7 +2183,6 @@ async function loadQualityStats() {
                 ],
                 dataLabels: {
                     enabled: true,
-                    textAnchor: 'start',
                     style: {
                         colors: ['#fff'],
                         fontWeight: 'bold'

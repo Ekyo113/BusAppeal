@@ -68,7 +68,7 @@ class Database:
         client = cls.get_client()
         try:
             # Query the vendor_mappings table for an exact match on 'pattern'
-            response = client.table("vendor_mappings").select("group_id").eq("pattern", car_number).execute()
+            response = client.table("vendor_mappings").select("group_id").eq("pattern", car_number.strip().upper()).execute()
             if response.data:
                 # Return all matching group IDs (usually only one due to UNIQUE constraint)
                 return [item["group_id"] for item in response.data]
@@ -141,20 +141,11 @@ class Database:
     @classmethod
     def get_pending_reports_by_car(cls, car_number: str) -> list:
         """查詢指定車號的所有未完成通報（狀態不為「已完成」）"""
-        client = cls.get_client()
-        try:
-            response = (
-                client.table("reports")
-                .select("id, car_number, description, status, created_at")
-                .eq("car_number", car_number)
-                .neq("status", "已完成")
-                .order("created_at", desc=False)
-                .execute()
-            )
-            return response.data
-        except Exception as e:
-            print(f"Database Error in get_pending_reports_by_car: {e}")
+        if not car_number:
             return []
+        target = car_number.strip().upper()
+        all_pending = cls.get_all_pending_reports()
+        return [r for r in all_pending if (r.get("car_number") or "").strip().upper() == target]
 
     @classmethod
     def get_all_pending_reports(cls) -> list:
@@ -270,10 +261,10 @@ class Database:
             vendors = cls.get_bus_vendors()
             for r in reports:
                 r['vendor_name'] = '未知客運'
-                car = (r.get('car_number', '') or '').strip()
+                car = (r.get('car_number', '') or '').strip().upper()
                 for v in vendors:
-                    plate = (v.get('plate_number', '') or '').strip()
-                    if plate and plate == car: # 改用精確匹配或包含匹配
+                    plate = (v.get('plate_number', '') or '').strip().upper()
+                    if plate and plate == car:
                         r['vendor_name'] = v.get('vendor_name', '未知客運')
                         break
             
@@ -300,9 +291,9 @@ class Database:
             vendors = cls.get_bus_vendors()
             for r in sorted_reports:
                 r['vendor_name'] = '未知客運'
-                car = (r.get('car_number', '') or '').strip()
+                car = (r.get('car_number', '') or '').strip().upper()
                 for v in vendors:
-                    plate = (v.get('plate_number', '') or '').strip()
+                    plate = (v.get('plate_number', '') or '').strip().upper()
                     if plate and plate == car:
                         r['vendor_name'] = v.get('vendor_name', '未知客運')
                         break

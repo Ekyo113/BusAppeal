@@ -222,7 +222,9 @@ def fetch_bus_status(city_code: str, force_a2: bool = False, bypass_cache: bool 
     # 同一車可能有多筆通報，取最新一筆
     incident_map: dict[str, dict] = {}
     for r in reports_rows:
-        cn = r["car_number"]
+        cn = (r["car_number"] or "").strip().upper()
+        if not cn:
+            continue
         if cn not in incident_map:
             incident_map[cn] = r
         else:
@@ -265,7 +267,7 @@ def fetch_bus_status(city_code: str, force_a2: bool = False, bypass_cache: bool 
     for plate, meta in monitored_plates.items():
         tdx_rec = tdx_map.get(plate)
         ns_rec = nearstop_map.get(plate)
-        incident = incident_map.get(plate)
+        incident = incident_map.get(plate.strip().upper())
 
         if tdx_rec or ns_rec:
             # 優先使用 A1 位置
@@ -383,6 +385,59 @@ def fetch_bus_status(city_code: str, force_a2: bool = False, bypass_cache: bool 
     res_payload_with_time = res_payload.copy()
     res_payload_with_time["cache_remaining_seconds"] = 600
     return res_payload_with_time
+
+
+def fetch_all_pending_reports() -> list[dict]:
+    """取得所有城市的未完成品情通報，並關聯 monitored_buses 以取得城市與客運商資訊。"""
+    client = Database.get_client()
+    try:
+        # 1. 取得所有未完成品情通報
+        reports = (
+            client.table("reports")
+            .select("id, car_number, description, status, created_at")
+            .neq("status", "已完成")
+            .order("created_at", desc=False)
+            .execute()
+            .data
+        )
+        if not reports:
+            return []
+
+        # 2. 取得所有受監控的公車對照清單
+        buses = (
+            client.table("monitored_buses")
+            .select("plate_number, city_code, vendor_name")
+            .eq("is_active", True)
+            .execute()
+            .data
+        )
+
+        # 3. 建立正規化車牌對照字典
+        bus_map = {}
+        for b in buses:
+            plate = (b.get("plate_number", "") or "").strip().upper()
+            if plate:
+                bus_map[plate] = b
+
+        # 4. 關聯通報與車輛資訊
+        results = []
+        for r in reports:
+            car = (r.get("car_number", "") or "").strip().upper()
+            bus_meta = bus_map.get(car)
+            
+            results.append({
+                "id": r["id"],
+                "plate_number": bus_meta["plate_number"] if bus_meta else r.get("car_number", ""),
+                "city_code": bus_meta["city_code"] if bus_meta else "",
+                "vendor_name": bus_meta["vendor_name"] if bus_meta else "未知客運",
+                "incident_description": r.get("description", "") or "",
+                "created_at": r.get("created_at", ""),
+                "status": r.get("status", "")
+            })
+        return results
+    except Exception as e:
+        print(f"[BusService] fetch_all_pending_reports error: {e}")
+        return []
 
 
 def _fetch_tdx_realtime(city_code: str) -> list[dict]:
