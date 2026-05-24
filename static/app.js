@@ -2295,15 +2295,20 @@ async function loadManhoursStats() {
         return true;
     });
     
-    // 計算不重複「處理方案 - 部件」組合的頻率
+    // 計算不重複「處理方案」的頻率，並記錄其對應的部件
     const replyFrequencies = {};
+    const solutionComponents = {};
     targetReports.forEach(r => {
-        let solType = (r.solution_type || '').trim();
-        if (!solType) solType = '未填寫方案';
-        let comp = (r.component || '').trim();
-        if (!comp) comp = '未填寫部件';
-        const key = `${solType} - ${comp}`;
-        replyFrequencies[key] = (replyFrequencies[key] || 0) + 1;
+        let sol = (r.solution || '').trim();
+        if (!sol) sol = '未填寫方案';
+        let comp = (r.component || '').trim() || '未分類';
+        
+        replyFrequencies[sol] = (replyFrequencies[sol] || 0) + 1;
+        
+        if (!solutionComponents[sol]) {
+            solutionComponents[sol] = new Set();
+        }
+        solutionComponents[sol].add(comp);
     });
     
     const tableBody = document.getElementById('manhours-table-body');
@@ -2326,25 +2331,22 @@ async function loadManhoursStats() {
         return;
     }
     
-    sortedReplies.forEach((key, index) => {
-        const count = replyFrequencies[key];
-        const unitHour = customReplyHours[key] !== undefined ? customReplyHours[key] : 0.5;
+    sortedReplies.forEach((sol, index) => {
+        const count = replyFrequencies[sol];
+        const unitHour = customReplyHours[sol] !== undefined ? customReplyHours[sol] : 0.5;
         const subtotal = count * unitHour;
         totalHours += subtotal;
         
-        // 分拆 Key 得到處理方案與部件
-        const parts = key.split(' - ');
-        const solType = parts[0];
-        const comp = parts[1] || '';
+        const compStr = Array.from(solutionComponents[sol]).join(', ');
         
         const row = document.createElement('tr');
         row.innerHTML = `
             <td style="text-align: center; padding: 0.8rem;">${index + 1}</td>
-            <td style="font-weight: 500; color: white; padding: 0.8rem;">${solType}</td>
-            <td style="font-weight: 500; color: #a1a1aa; padding: 0.8rem;">${comp}</td>
+            <td style="font-weight: 500; color: white; padding: 0.8rem;">${sol}</td>
+            <td style="font-weight: 500; color: #a1a1aa; padding: 0.8rem;">${compStr}</td>
             <td style="text-align: center; font-weight: 600; color: var(--primary); padding: 0.8rem;">${count}</td>
             <td style="text-align: center; padding: 0.8rem;">
-                <input type="number" class="manhour-input" data-reply="${encodeURIComponent(key)}" value="${unitHour}" step="0.1" min="0" onchange="onManhourChange(this, ${count})" style="width: 100px; padding: 0.35rem; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: white; text-align: center;">
+                <input type="number" class="manhour-input" data-reply="${encodeURIComponent(sol)}" value="${unitHour}" step="0.1" min="0" onchange="onManhourChange(this, ${count})" style="width: 100px; padding: 0.35rem; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: white; text-align: center;">
             </td>
             <td class="subtotal-cell" style="text-align: center; font-weight: bold; color: #10b981; padding: 0.8rem;">${subtotal.toFixed(1)} hr</td>
         `;

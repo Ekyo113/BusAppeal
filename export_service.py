@@ -546,7 +546,7 @@ class ExportService:
                 ax1.set_xlabel('件數', fontsize=8)
                 ax1.tick_params(axis='x', labelsize=8)
                 ax1.set_title('各客運商部件件數統計', fontsize=9, fontweight='bold')
-                ax1.legend(loc='upper right', fontsize=6, ncol=2, framealpha=0.5)
+                ax1.legend(loc='upper center', bbox_to_anchor=(0.5, -0.25), fontsize=6, ncol=6, framealpha=0.5)
                 
             # Right Subplot
             active_components = {k: v for k, v in component_totals.items() if v > 0}
