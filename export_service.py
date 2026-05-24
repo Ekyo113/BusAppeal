@@ -362,7 +362,7 @@ class ExportService:
             r_month = comp_at[:7] # YYYY-MM
             if r_month in quality_counts:
                 all_counts[r_month] += 1
-                if r.get('solution_type') in ['維修', '更換']:
+                if r.get('solution_type') in ['維修', '更換', '售服']:
                     quality_counts[r_month] += 1
                     
         quality_monthly = [quality_counts[m] for m in months_list]
@@ -400,7 +400,7 @@ class ExportService:
         lines, labels = ax1.get_legend_handles_labels()
         lines2, labels2 = ax1_twin.get_legend_handles_labels()
         ax1.legend(lines + lines2, labels + labels2, loc='upper left', fontsize=8)
-        ax1.set_title("每月品情(維修+更換)統計趨勢", fontsize=10, fontweight='bold', pad=10)
+        ax1.set_title("每月品情(維修+更換+售服)統計趨勢", fontsize=10, fontweight='bold', pad=10)
         
         # Right Subplot: All Types
         ax2.bar(x, all_monthly, color='#10b981', width=0.4, label='當月完成')
@@ -429,7 +429,54 @@ class ExportService:
         # Draw Page 1 in PDF
         c.setFont(font_name, 16)
         c.drawString(40, height - 40, "一、 每月維修統計趨勢")
-        c.drawImage(ImageReader(page1_img_buf), 30, height/2 - 160, width=535, height=250)
+        c.drawImage(ImageReader(page1_img_buf), 30, 480, width=535, height=250)
+        
+        # 繪製當月及累計數量表格
+        table_y = 420
+        row_height = 20
+        col_widths = [80, 130, 90, 90, 90]  # 總寬度 = 480
+        start_x = (width - 480) / 2 # 置中
+        
+        # 繪製表頭背景
+        c.setFillColorRGB(0.92, 0.94, 0.98) # 淺藍色背景
+        c.rect(start_x, table_y, 480, row_height, fill=True, stroke=False)
+        c.setFillColorRGB(0, 0, 0)
+        c.setStrokeColorRGB(0.7, 0.7, 0.7)
+        c.setLineWidth(0.5)
+        c.line(start_x, table_y, start_x + 480, table_y)
+        c.line(start_x, table_y + row_height, start_x + 480, table_y + row_height)
+        
+        headers = ["月份", "品情當月", "品情累計", "所有當月", "所有累計"]
+        curr_x = start_x
+        c.setFont(font_name, 9)
+        for i, h in enumerate(headers):
+            c.drawCentredString(curr_x + col_widths[i]/2, table_y + 5, h)
+            curr_x += col_widths[i]
+            if i < len(headers) - 1:
+                c.line(curr_x, table_y, curr_x, table_y + row_height)
+                
+        # 繪製資料列
+        for idx, m_disp in enumerate(months_display):
+            table_y -= row_height
+            c.line(start_x, table_y, start_x + 480, table_y)
+            
+            q_m = quality_monthly[idx]
+            q_c = quality_cumulative[idx]
+            a_m = all_monthly[idx]
+            a_c = all_cumulative[idx]
+            
+            curr_x = start_x
+            row_data = [m_disp, f"{q_m} 件", f"{q_c} 件", f"{a_m} 件", f"{a_c} 件"]
+            for i, val in enumerate(row_data):
+                c.drawCentredString(curr_x + col_widths[i]/2, table_y + 5, val)
+                curr_x += col_widths[i]
+                if i < len(headers) - 1:
+                    c.line(curr_x, table_y, curr_x, table_y + row_height)
+                    
+        # 繪製外框左右兩邊的垂直線
+        c.line(start_x, table_y, start_x, 420 + row_height)
+        c.line(start_x + 480, table_y, start_x + 480, 420 + row_height)
+        
         c.showPage()
         
         # 4. Page 2: Operator & Component breakdown
@@ -471,7 +518,9 @@ class ExportService:
                 
             vendor_totals = {v: sum(comps.values()) for v, comps in vendor_stats.items()}
             sorted_vendors = sorted(vendor_totals.items(), key=lambda x: x[1], reverse=True)
+            # 為了讓數量最多的客運商顯示在長條圖的最上方(Matplotlib 預設 y=0 在最下方)，我們將 operators 反轉
             operators = [item[0] for item in sorted_vendors]
+            operators.reverse()
             
             fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 2.5), dpi=150)
             
@@ -488,6 +537,10 @@ class ExportService:
                         ax1.barh(y_pos, comp_data, left=left_accum, label=comp, color=component_colors.get(comp, '#9ca3af'), height=0.55)
                         for i in range(len(operators)):
                             left_accum[i] += comp_data[i]
+                # 在各客運商長條圖末端顯示當月總件數
+                for i, op in enumerate(operators):
+                    total_val = vendor_totals[op]
+                    ax1.text(total_val + 0.1, i, f"{total_val}", va='center', ha='left', fontsize=7, fontweight='bold')
                 ax1.set_yticks(y_pos)
                 ax1.set_yticklabels(operators, fontsize=8)
                 ax1.set_xlabel('件數', fontsize=8)
@@ -527,11 +580,11 @@ class ExportService:
 
         # Generate the three rows
         row1_reports = month_reports
-        row2_reports = [r for r in month_reports if r.get('solution_type') in ['更換', '維修']]
+        row2_reports = [r for r in month_reports if r.get('solution_type') in ['更換', '維修', '售服']]
         row3_reports = [r for r in month_reports if r.get('solution_type') == '設計修改']
         
         row1_img_buf = compute_and_plot_page2_row(row1_reports, "【全部類型圖表】")
-        row2_img_buf = compute_and_plot_page2_row(row2_reports, "【品情 (更換 + 維修) 圖表】")
+        row2_img_buf = compute_and_plot_page2_row(row2_reports, "【品情 (更換 + 維修 + 售服) 圖表】")
         row3_img_buf = compute_and_plot_page2_row(row3_reports, "【設計修改圖表】")
         
         # Draw Page 2 in PDF

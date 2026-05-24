@@ -22,3 +22,5 @@ debug_a2.py
 local_test_matching.py
 README_TEST.md
 
+# Matplotlib dynamic fonts
+static/*.ttf
