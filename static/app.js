@@ -291,6 +291,7 @@ function viewDetail(id) {
                         <option value="方向燈座" ${report.component === '方向燈座' ? 'selected' : ''}>方向燈座</option>
                         <option value="車門" ${report.component === '車門' ? 'selected' : ''}>車門</option>
                         <option value="車裝" ${report.component === '車裝' ? 'selected' : ''}>車裝</option>
+                        <option value="車體外裝" ${report.component === '車體外裝' ? 'selected' : ''}>車體外裝</option>
                         <option value="燈光" ${report.component === '燈光' ? 'selected' : ''}>燈光</option>
                         <option value="底盤件" ${report.component === '底盤件' ? 'selected' : ''}>底盤件</option>
                         <option value="儀錶" ${report.component === '儀錶' ? 'selected' : ''}>儀錶</option>
@@ -428,7 +429,7 @@ function updateStats() {
     if (countInProgressEl) countInProgressEl.innerText = allReports.filter(r => r.status === '維修中').length;
     const countDoneEl = document.getElementById('count-done');
     if (countDoneEl) {
-        const statsRange = document.getElementById('done-stats-range') ? document.getElementById('done-stats-range').value : 'all';
+        const statsRange = document.getElementById('done-stats-range') ? document.getElementById('done-stats-range').value : 'month';
         if (statsRange === 'month') {
             const now = new Date();
             const yyyy = now.getFullYear();
@@ -563,6 +564,8 @@ function switchTab(tabId) {
         loadExportTab();
     } else if (tabId === 'tab-quality') {
         loadQualityStats();
+    } else if (tabId === 'tab-manhours') {
+        loadManhoursStats();
     }
 }
 
@@ -1526,6 +1529,24 @@ function loadExportTab() {
         endDateEl.value = `${yyyy}-${mm}-${dd}`;
     }
 
+    // Populate monthly report export dropdown
+    const monthlySelect = document.getElementById('export-monthly-report-select');
+    if (monthlySelect && monthlySelect.children.length === 0) {
+        const now = new Date();
+        for (let i = 0; i < 12; i++) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const val = `${yyyy}-${mm}`;
+            const text = `${yyyy}年${d.getMonth() + 1}月`;
+            const opt = document.createElement('option');
+            opt.value = val;
+            opt.innerText = text;
+            if (i === 0) opt.selected = true;
+            monthlySelect.appendChild(opt);
+        }
+    }
+
     if (!exportInitialized) {
         resetExportSelection();
         exportInitialized = true;
@@ -1935,7 +1956,7 @@ async function loadQualityStats() {
         if (start && datePart < start) return false;
         if (end && datePart > end) return false;
 
-        const type = r.solution_type;
+        const type = (r.solution_type || '').trim();
         if (type === '更換') return showReplace;
         if (type === '維修') return showRepair;
         if (type === '設計修改') return showDesign;
@@ -1944,7 +1965,7 @@ async function loadQualityStats() {
     });
 
     // 3. 定義部件選項清單 (用於堆疊圖 Series)
-    const componentsList = ["TMS", "動力", "BMS", "冷氣", "電子影像", "方向燈座", "車門", "車裝", "燈光", "底盤件", "儀錶", "其他", "未分類"];
+    const componentsList = ["TMS", "動力", "BMS", "冷氣", "電子影像", "方向燈座", "車門", "車裝", "車體外裝", "燈光", "底盤件", "儀錶", "其他", "未分類"];
     
     // 4. 初始化客運商統計資料結構
     const vendorStats = {};
@@ -1974,6 +1995,7 @@ async function loadQualityStats() {
                 replaceCount: 0,
                 repairCount: 0,
                 designCount: 0,
+                afterSalesCount: 0,
                 totalCount: 0,
                 componentCounts: {}
             };
@@ -1982,12 +2004,15 @@ async function loadQualityStats() {
             });
         }
         
-        if (r.solution_type === '更換') {
+        const solType = (r.solution_type || '').trim();
+        if (solType === '更換') {
             vendorStats[vendor].replaceCount++;
-        } else if (r.solution_type === '維修') {
+        } else if (solType === '維修') {
             vendorStats[vendor].repairCount++;
-        } else if (r.solution_type === '設計修改') {
+        } else if (solType === '設計修改') {
             vendorStats[vendor].designCount++;
+        } else if (solType === '售服') {
+            vendorStats[vendor].afterSalesCount++;
         }
         vendorStats[vendor].totalCount++;
         vendorStats[vendor].componentCounts[comp]++;
@@ -2055,6 +2080,7 @@ async function loadQualityStats() {
                     '#ec4899', // 方向燈座 (粉)
                     '#8b5cf6', // 車門 (紫)
                     '#06b6d4', // 車裝 (青)
+                    '#84cc16', // 車體外裝 (黃綠)
                     '#ef4444', // 燈光 (紅)
                     '#14b8a6', // 底盤件 (藍綠)
                     '#f97316', // 儀錶 (橘)
@@ -2175,6 +2201,7 @@ async function loadQualityStats() {
                     '#ec4899', // 方向燈座 (粉)
                     '#8b5cf6', // 車門 (紫)
                     '#06b6d4', // 車裝 (青)
+                    '#84cc16', // 車體外裝 (黃綠)
                     '#ef4444', // 燈光 (紅)
                     '#14b8a6', // 底盤件 (藍綠)
                     '#f97316', // 儀錶 (橘)
@@ -2224,6 +2251,233 @@ async function loadQualityStats() {
             qualityComponentChart = new ApexCharts(compChartContainer, compOptions);
             qualityComponentChart.render();
         }
+    }
+}
+
+// ==========================================================================
+// 工時統計與月報 PDF 導出功能 (Tab: Man-hours & PDF Exports)
+// ==========================================================================
+let customReplyHours = {}; // 記憶體中的工時對照
+
+async function loadManhoursStats() {
+    const startInput = document.getElementById('manhours-start-date');
+    const endInput = document.getElementById('manhours-end-date');
+    
+    // 設定預設為當月
+    const today = new Date();
+    if (startInput && !startInput.value) {
+        const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+        const yyyy = firstDay.getFullYear();
+        const mm = String(firstDay.getMonth() + 1).padStart(2, '0');
+        startInput.value = `${yyyy}-${mm}-01`;
+    }
+    if (endInput && !endInput.value) {
+        const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+        const yyyy = lastDay.getFullYear();
+        const mm = String(lastDay.getMonth() + 1).padStart(2, '0');
+        const dd = String(lastDay.getDate()).padStart(2, '0');
+        endInput.value = `${yyyy}-${mm}-${dd}`;
+    }
+    
+    const start = startInput ? startInput.value : '';
+    const end = endInput ? endInput.value : '';
+    
+    // 獲取設定工時
+    await fetchReplyHours();
+    
+    // 篩選出已完成的案件
+    const targetReports = allReports.filter(r => {
+        if (r.status !== '已完成') return false;
+        if (!r.completed_at) return false;
+        const completedDate = r.completed_at.slice(0, 10);
+        if (start && completedDate < start) return false;
+        if (end && completedDate > end) return false;
+        return true;
+    });
+    
+    // 計算不重複回覆的頻率
+    const replyFrequencies = {};
+    targetReports.forEach(r => {
+        let reply = (r.reply || r.solution || '').trim();
+        if (!reply) {
+            reply = '未填寫回覆';
+        }
+        replyFrequencies[reply] = (replyFrequencies[reply] || 0) + 1;
+    });
+    
+    const tableBody = document.getElementById('manhours-table-body');
+    const totalReportsEl = document.getElementById('manhours-total-reports');
+    const totalHoursEl = document.getElementById('manhours-total-hours');
+    
+    if (!tableBody || !totalReportsEl || !totalHoursEl) return;
+    
+    tableBody.innerHTML = '';
+    
+    const sortedReplies = Object.keys(replyFrequencies).sort((a, b) => replyFrequencies[b] - replyFrequencies[a]);
+    
+    let totalReports = targetReports.length;
+    let totalHours = 0;
+    
+    if (sortedReplies.length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2rem;">此日期範圍內無任何已完成通報紀錄</td></tr>';
+        totalReportsEl.innerText = '0';
+        totalHoursEl.innerText = '0.0 hr';
+        return;
+    }
+    
+    sortedReplies.forEach((reply, index) => {
+        const count = replyFrequencies[reply];
+        const unitHour = customReplyHours[reply] !== undefined ? customReplyHours[reply] : 0.5;
+        const subtotal = count * unitHour;
+        totalHours += subtotal;
+        
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td style="text-align: center; padding: 0.8rem;">${index + 1}</td>
+            <td style="font-weight: 500; color: white; padding: 0.8rem;">${reply}</td>
+            <td style="text-align: center; font-weight: 600; color: var(--primary); padding: 0.8rem;">${count}</td>
+            <td style="text-align: center; padding: 0.8rem;">
+                <input type="number" class="manhour-input" data-reply="${encodeURIComponent(reply)}" value="${unitHour}" step="0.1" min="0" onchange="onManhourChange(this, ${count})" style="width: 100px; padding: 0.35rem; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: white; text-align: center;">
+            </td>
+            <td class="subtotal-cell" style="text-align: center; font-weight: bold; color: #10b981; padding: 0.8rem;">${subtotal.toFixed(1)} hr</td>
+        `;
+        tableBody.appendChild(row);
+    });
+    
+    totalReportsEl.innerText = totalReports;
+    totalHoursEl.innerText = `${totalHours.toFixed(1)} hr`;
+}
+
+async function fetchReplyHours() {
+    const token = document.getElementById('admin-token').value;
+    try {
+        const res = await fetch('/admin/reply_hours', {
+            headers: { 'token': token }
+        });
+        if (res.ok) {
+            const data = await res.json();
+            customReplyHours = {};
+            data.forEach(item => {
+                customReplyHours[item.reply_text] = parseFloat(item.hours);
+            });
+            localStorage.setItem('custom_reply_hours', JSON.stringify(customReplyHours));
+        } else {
+            throw new Error("API Error");
+        }
+    } catch (e) {
+        console.warn("Failed to fetch reply hours from DB, falling back to localStorage", e);
+        const cached = localStorage.getItem('custom_reply_hours');
+        if (cached) {
+            customReplyHours = JSON.parse(cached);
+        } else {
+            customReplyHours = {};
+        }
+    }
+}
+
+function onManhourChange(inputEl, count) {
+    const reply = decodeURIComponent(inputEl.getAttribute('data-reply'));
+    const val = parseFloat(inputEl.value) || 0;
+    inputEl.value = val;
+    
+    customReplyHours[reply] = val;
+    
+    const row = inputEl.closest('tr');
+    if (row) {
+        const subtotalCell = row.querySelector('.subtotal-cell');
+        if (subtotalCell) {
+            subtotalCell.innerText = `${(count * val).toFixed(1)} hr`;
+        }
+    }
+    
+    recalculateTotalHours();
+}
+
+function recalculateTotalHours() {
+    let total = 0;
+    const rows = document.querySelectorAll('#manhours-table-body tr');
+    rows.forEach(row => {
+        const countCell = row.cells[2];
+        const inputEl = row.querySelector('.manhour-input');
+        if (countCell && inputEl) {
+            const count = parseInt(countCell.innerText) || 0;
+            const hour = parseFloat(inputEl.value) || 0;
+            total += count * hour;
+        }
+    });
+    const totalHoursEl = document.getElementById('manhours-total-hours');
+    if (totalHoursEl) {
+        totalHoursEl.innerText = `${total.toFixed(1)} hr`;
+    }
+}
+
+async function saveManhoursSettings() {
+    const token = document.getElementById('admin-token').value;
+    const items = [];
+    
+    const inputs = document.querySelectorAll('.manhour-input');
+    inputs.forEach(input => {
+        const reply = decodeURIComponent(input.getAttribute('data-reply'));
+        const hour = parseFloat(input.value) || 0;
+        items.push({ reply_text: reply, hours: hour });
+        customReplyHours[reply] = hour;
+    });
+    
+    localStorage.setItem('custom_reply_hours', JSON.stringify(customReplyHours));
+    
+    try {
+        const res = await fetch('/admin/reply_hours', {
+            method: 'POST',
+            headers: {
+                'token': token,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(items)
+        });
+        if (res.ok) {
+            showToast("工時設定已儲存至雲端資料庫！");
+        } else {
+            throw new Error("HTTP " + res.status);
+        }
+    } catch (e) {
+        console.error("Failed to save reply hours to server", e);
+        showToast("已暫存於瀏覽器本地！", "error");
+    }
+}
+
+async function exportMonthlyReportPdf() {
+    const select = document.getElementById('export-monthly-report-select');
+    if (!select) return;
+    const month = select.value;
+    const token = document.getElementById('admin-token').value;
+    
+    showToast("報表繪製與 PDF 下載中，請稍候...", "success");
+    
+    try {
+        const url = `/admin/export/monthly_report?month=${month}`;
+        const res = await fetch(url, {
+            headers: { 'token': token }
+        });
+        
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || "無法下載 PDF");
+        }
+        
+        const blob = await res.blob();
+        const blobUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = `市場組維修報表_${month}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(blobUrl);
+        
+        showToast("月報 PDF 匯出成功！");
+    } catch (e) {
+        console.error(e);
+        showToast(e.message, "error");
     }
 }
 

@@ -314,3 +314,29 @@ class Database:
         )
         # Get public URL
         return client.storage.from_("bus-media").get_public_url(path)
+
+    @classmethod
+    def get_all_reply_hours(cls):
+        """獲取所有自訂回覆工時對照"""
+        client = cls.get_client()
+        try:
+            res = client.table('reply_hours').select('*').execute()
+            return res.data
+        except Exception as e:
+            print(f"DB Error get_all_reply_hours: {e}")
+            return []
+
+    @classmethod
+    def update_reply_hour(cls, reply_text: str, hours: float):
+        """新增或更新某個回覆項目的工時"""
+        client = cls.get_client()
+        data = {
+            "reply_text": reply_text,
+            "hours": hours,
+            "updated_at": datetime.utcnow().isoformat()
+        }
+        try:
+            return client.table('reply_hours').upsert(data).execute()
+        except Exception as e:
+            print(f"DB Error update_reply_hour: {e}")
+            raise e

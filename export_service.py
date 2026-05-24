@@ -284,3 +284,266 @@ class ExportService:
             buffer.seek(0)
             return buffer
 
+    @staticmethod
+    def setup_matplotlib_font():
+        """設定 Matplotlib 中文字型，若無字型則下載 Noto Sans TC"""
+        import os
+        import urllib.request
+        import matplotlib.pyplot as plt
+        import matplotlib.font_manager as fm
+        
+        static_dir = os.path.join(os.path.dirname(__file__), "static")
+        os.makedirs(static_dir, exist_ok=True)
+        font_path = os.path.join(static_dir, "NotoSansTC-Regular.ttf")
+        
+        if not os.path.exists(font_path):
+            print("NotoSansTC-Regular.ttf not found. Downloading from Google Fonts CJK/g0v mirror...")
+            try:
+                url = "https://raw.githubusercontent.com/g0v/ogp-commitments/main/NotoSansTC-Regular.ttf"
+                headers = {'User-Agent': 'Mozilla/5.0'}
+                req = urllib.request.Request(url, headers=headers)
+                with urllib.request.urlopen(req) as response, open(font_path, 'wb') as out_file:
+                    out_file.write(response.read())
+                print("Download completed successfully.")
+            except Exception as e:
+                print(f"Failed to download font: {e}")
+                
+        if os.path.exists(font_path):
+            try:
+                fm.fontManager.addfont(font_path)
+                plt.rcParams['font.sans-serif'] = ['Noto Sans TC']
+                plt.rcParams['axes.unicode_minus'] = False
+            except Exception as e:
+                print(f"Failed to add font to matplotlib: {e}")
+
+    @staticmethod
+    def generate_monthly_report_pdf(reports, month: str, start_date: str, end_date: str):
+        import os
+        import io
+        from datetime import datetime, timedelta
+        import matplotlib.pyplot as plt
+        from reportlab.pdfgen import canvas
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.utils import ImageReader
+        
+        buffer = io.BytesIO()
+        c = canvas.Canvas(buffer, pagesize=A4)
+        width, height = A4
+        font_name = ExportService.setup_font()
+        
+        # Parse month number
+        try:
+            target_year, target_month_num = map(int, month.split("-"))
+        except ValueError:
+            target_year, target_month_num = datetime.now().year, datetime.now().month
+
+        # 1. Page 1: Cover
+        c.setFont(font_name, 24)
+        c.drawCentredString(width/2, height/2 + 50, f"({target_month_num}月)市場組維修報表")
+        
+        c.setFont(font_name, 12)
+        c.drawCentredString(width/2, height/2 - 10, f"產出日期：{datetime.now().strftime('%Y-%m-%d')}")
+        c.showPage()
+        
+        # 2. Setup Matplotlib Font
+        ExportService.setup_matplotlib_font()
+        
+        # 3. Compile Monthly trend statistics (Jan to target_month_num)
+        months_list = [f"{target_year}-{m:02d}" for m in range(1, target_month_num + 1)]
+        months_display = [f"{m}月" for m in range(1, target_month_num + 1)]
+        
+        quality_counts = {m: 0 for m in months_list}
+        all_counts = {m: 0 for m in months_list}
+        
+        for r in reports:
+            comp_at = r.get('completed_at', '')
+            if not comp_at:
+                continue
+            r_month = comp_at[:7] # YYYY-MM
+            if r_month in quality_counts:
+                all_counts[r_month] += 1
+                if r.get('solution_type') in ['維修', '更換']:
+                    quality_counts[r_month] += 1
+                    
+        quality_monthly = [quality_counts[m] for m in months_list]
+        all_monthly = [all_counts[m] for m in months_list]
+        
+        quality_cumulative = []
+        acc_q = 0
+        for val in quality_monthly:
+            acc_q += val
+            quality_cumulative.append(acc_q)
+            
+        all_cumulative = []
+        acc_a = 0
+        for val in all_monthly:
+            acc_a += val
+            all_cumulative.append(acc_a)
+
+        # Plot Page 1 Charts
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4.2), dpi=150)
+        x = range(len(months_display))
+        
+        # Left Subplot: Quality
+        ax1.bar(x, quality_monthly, color='#3b82f6', width=0.4, label='當月完成')
+        ax1.set_ylabel('當月完成數量 (件)', color='#3b82f6', fontsize=9)
+        ax1.tick_params(axis='y', labelcolor='#3b82f6', labelsize=8)
+        ax1.set_xticks(x)
+        ax1.set_xticklabels(months_display, fontsize=8)
+        ax1.grid(True, axis='y', linestyle='--', alpha=0.5)
+        
+        ax1_twin = ax1.twinx()
+        ax1_twin.plot(x, quality_cumulative, color='#f59e0b', marker='o', linewidth=2, label='累計完成')
+        ax1_twin.set_ylabel('累計完成數量 (件)', color='#f59e0b', fontsize=9)
+        ax1_twin.tick_params(axis='y', labelcolor='#f59e0b', labelsize=8)
+        
+        lines, labels = ax1.get_legend_handles_labels()
+        lines2, labels2 = ax1_twin.get_legend_handles_labels()
+        ax1.legend(lines + lines2, labels + labels2, loc='upper left', fontsize=8)
+        ax1.set_title("每月品情(維修+更換)統計趨勢", fontsize=10, fontweight='bold', pad=10)
+        
+        # Right Subplot: All Types
+        ax2.bar(x, all_monthly, color='#10b981', width=0.4, label='當月完成')
+        ax2.set_ylabel('當月完成數量 (件)', color='#10b981', fontsize=9)
+        ax2.tick_params(axis='y', labelcolor='#10b981', labelsize=8)
+        ax2.set_xticks(x)
+        ax2.set_xticklabels(months_display, fontsize=8)
+        ax2.grid(True, axis='y', linestyle='--', alpha=0.5)
+        
+        ax2_twin = ax2.twinx()
+        ax2_twin.plot(x, all_cumulative, color='#ef4444', marker='s', linewidth=2, label='累計完成')
+        ax2_twin.set_ylabel('累計完成數量 (件)', color='#ef4444', fontsize=9)
+        ax2_twin.tick_params(axis='y', labelcolor='#ef4444', labelsize=8)
+        
+        lines, labels = ax2.get_legend_handles_labels()
+        lines2, labels2 = ax2_twin.get_legend_handles_labels()
+        ax2.legend(lines + lines2, labels + labels2, loc='upper left', fontsize=8)
+        ax2.set_title("每月所有類型完成統計趨勢", fontsize=10, fontweight='bold', pad=10)
+        
+        fig.tight_layout()
+        page1_img_buf = io.BytesIO()
+        plt.savefig(page1_img_buf, format='png', bbox_inches='tight')
+        plt.close(fig)
+        page1_img_buf.seek(0)
+        
+        # Draw Page 1 in PDF
+        c.setFont(font_name, 16)
+        c.drawString(40, height - 40, "一、 每月維修統計趨勢")
+        c.drawImage(ImageReader(page1_img_buf), 30, height/2 - 160, width=535, height=250)
+        c.showPage()
+        
+        # 4. Page 2: Operator & Component breakdown
+        month_reports = [r for r in reports if r.get('completed_at', '').startswith(month)]
+        components_list = ["TMS", "動力", "BMS", "冷氣", "電子影像", "方向燈座", "車門", "車裝", "車體外裝", "燈光", "底盤件", "儀錶", "其他", "未分類"]
+        component_colors = {
+            "TMS": '#3b82f6',
+            "動力": '#f59e0b',
+            "BMS": '#10b981',
+            "冷氣": '#0ea5e9',
+            "電子影像": '#d946ef',
+            "方向燈座": '#ec4899',
+            "車門": '#8b5cf6',
+            "車裝": '#06b6d4',
+            "車體外裝": '#84cc16',
+            "燈光": '#ef4444',
+            "底盤件": '#14b8a6',
+            "儀錶": '#f97316',
+            "其他": '#6b7280',
+            "未分類": '#9ca3af'
+        }
+        
+        def compute_and_plot_page2_row(row_reports, title_text):
+            vendor_stats = {}
+            component_totals = {c: 0 for c in components_list}
+            
+            for r in row_reports:
+                vendor = r.get('vendor_name', '未知客運') or '未知客運'
+                comp = (r.get('component') or '').strip()
+                if not comp:
+                    comp = '未分類'
+                elif comp not in components_list:
+                    comp = '其他'
+                    
+                if vendor not in vendor_stats:
+                    vendor_stats[vendor] = {c: 0 for c in components_list}
+                vendor_stats[vendor][comp] += 1
+                component_totals[comp] += 1
+                
+            vendor_totals = {v: sum(comps.values()) for v, comps in vendor_stats.items()}
+            sorted_vendors = sorted(vendor_totals.items(), key=lambda x: x[1], reverse=True)
+            operators = [item[0] for item in sorted_vendors]
+            
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 2.5), dpi=150)
+            
+            # Left Subplot
+            if not operators:
+                ax1.text(0.5, 0.5, '當月無資料', ha='center', va='center', fontsize=9)
+                ax1.set_axis_off()
+            else:
+                y_pos = range(len(operators))
+                left_accum = [0] * len(operators)
+                for comp in components_list:
+                    comp_data = [vendor_stats[op][comp] for op in operators]
+                    if sum(comp_data) > 0:
+                        ax1.barh(y_pos, comp_data, left=left_accum, label=comp, color=component_colors.get(comp, '#9ca3af'), height=0.55)
+                        for i in range(len(operators)):
+                            left_accum[i] += comp_data[i]
+                ax1.set_yticks(y_pos)
+                ax1.set_yticklabels(operators, fontsize=8)
+                ax1.set_xlabel('件數', fontsize=8)
+                ax1.tick_params(axis='x', labelsize=8)
+                ax1.set_title('各客運商部件件數統計', fontsize=9, fontweight='bold')
+                ax1.legend(loc='upper right', fontsize=6, ncol=2, framealpha=0.5)
+                
+            # Right Subplot
+            active_components = {k: v for k, v in component_totals.items() if v > 0}
+            if not active_components:
+                ax2.text(0.5, 0.5, '當月無資料', ha='center', va='center', fontsize=9)
+                ax2.set_axis_off()
+            else:
+                sorted_comps = sorted(active_components.items(), key=lambda x: x[1])
+                comp_names = [item[0] for item in sorted_comps]
+                comp_values = [item[1] for item in sorted_comps]
+                colors = [component_colors.get(c, '#9ca3af') for c in comp_names]
+                
+                y_pos = range(len(comp_names))
+                ax2.barh(y_pos, comp_values, color=colors, height=0.55)
+                ax2.set_yticks(y_pos)
+                ax2.set_yticklabels(comp_names, fontsize=8)
+                ax2.set_xlabel('累積數量 (件)', fontsize=8)
+                ax2.tick_params(axis='x', labelsize=8)
+                ax2.set_title('部件累計數量統計', fontsize=9, fontweight='bold')
+                for i, val in enumerate(comp_values):
+                    ax2.text(val + 0.1, i, f"{val}", va='center', fontsize=7, fontweight='bold')
+                    
+            fig.suptitle(title_text, fontsize=10, fontweight='bold', y=0.98)
+            fig.tight_layout()
+            
+            buf = io.BytesIO()
+            plt.savefig(buf, format='png', bbox_inches='tight')
+            plt.close(fig)
+            buf.seek(0)
+            return buf
+
+        # Generate the three rows
+        row1_reports = month_reports
+        row2_reports = [r for r in month_reports if r.get('solution_type') in ['更換', '維修']]
+        row3_reports = [r for r in month_reports if r.get('solution_type') == '設計修改']
+        
+        row1_img_buf = compute_and_plot_page2_row(row1_reports, "【全部類型圖表】")
+        row2_img_buf = compute_and_plot_page2_row(row2_reports, "【品情 (更換 + 維修) 圖表】")
+        row3_img_buf = compute_and_plot_page2_row(row3_reports, "【設計修改圖表】")
+        
+        # Draw Page 2 in PDF
+        c.setFont(font_name, 16)
+        c.drawString(40, height - 40, "二、 各客運商與部件統計分析")
+        
+        c.drawImage(ImageReader(row1_img_buf), 30, 560, width=535, height=190)
+        c.drawImage(ImageReader(row2_img_buf), 30, 320, width=535, height=190)
+        c.drawImage(ImageReader(row3_img_buf), 30, 80, width=535, height=190)
+        
+        c.showPage()
+        c.save()
+        buffer.seek(0)
+        return buffer
+

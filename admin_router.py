@@ -301,3 +301,65 @@ async def analyze_all_logs(token: str = Header(None)):
         return {"status": "success", "analyzed_count": len(results)}
     finally:
         is_analyzing = False
+
+
+class ReplyHourItem(BaseModel):
+    reply_text: str
+    hours: float
+
+@router.get("/reply_hours")
+async def get_reply_hours(token: str = Header(None)):
+    verify_token(token)
+    return Database.get_all_reply_hours()
+
+@router.post("/reply_hours")
+async def save_reply_hours(items: list[ReplyHourItem], token: str = Header(None)):
+    verify_token(token)
+    for item in items:
+        Database.update_reply_hour(item.reply_text, item.hours)
+    return {"status": "success"}
+
+@router.get("/export/monthly_report")
+async def get_monthly_report(month: str = None, token: str = Header(None)):
+    """
+    導出 (特定月份)市場組維修報表 PDF
+    month format: "YYYY-MM" (例如 "2026-05")
+    """
+    verify_token(token)
+    if not month:
+        tz = pytz.timezone('Asia/Taipei')
+        month = datetime.now(tz).strftime('%Y-%m')
+    
+    # 獲取直到該月月底的所有已完成通報，用來繪製第一頁趨勢圖
+    # 以及當月完成通報，用來繪製第二頁客運部件分析
+    # 月份格式：2026-05
+    try:
+        year, month_num = map(int, month.split("-"))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="月份格式錯誤，必須為 YYYY-MM")
+        
+    import calendar
+    last_day = calendar.monthrange(year, month_num)[1]
+    
+    start_date = f"{year}-01-01"
+    end_date = f"{year}-{month_num:02d}-{last_day:02d}"
+    
+    # 獲取已完成的通報
+    reports = Database.get_reports_for_export(start_date, end_date, "all")
+    
+    # 呼叫 ExportService 來產生 PDF
+    pdf_buffer = ExportService.generate_monthly_report_pdf(reports, month, start_date, end_date)
+    
+    filename = f"市場組維修報表_{month}.pdf"
+    
+    from urllib.parse import quote
+    encoded_filename = quote(filename)
+    
+    return StreamingResponse(
+        pdf_buffer,
+        media_type="application/pdf",
+        headers={
+            "Access-Control-Expose-Headers": "Content-Disposition", 
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
+        }
+    )

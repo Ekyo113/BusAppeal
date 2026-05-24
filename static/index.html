@@ -43,8 +43,8 @@
                     </span>
                 </div>
                 <select id="done-stats-range" onchange="updateStats()" style="background: var(--surface-light); border: 1px solid var(--border); color: white; padding: 0.35rem 0.5rem; border-radius: 6px; font-size: 0.85rem; margin-right: 0.5rem; outline: none; cursor: pointer;">
-                    <option value="month">本月</option>
-                    <option value="all" selected>累計</option>
+                    <option value="month" selected>本月</option>
+                    <option value="all">累計</option>
                 </select>
                 <select id="reports-sort-by" onchange="renderReports()" style="background: var(--surface-light); border: 1px solid var(--border); color: white; padding: 0.35rem 0.5rem; border-radius: 6px; font-size: 0.85rem; margin-right: 0.5rem; outline: none; cursor: pointer;">
                     <option value="created_at">排序：建立時間</option>
@@ -66,6 +66,7 @@
             <button class="tab-btn" onclick="switchTab('tab-stats')">設計修改統計</button>
             <button class="tab-btn" onclick="switchTab('tab-export')">導出報表</button>
             <button class="tab-btn" onclick="switchTab('tab-quality')">品情統計</button>
+            <button class="tab-btn" onclick="switchTab('tab-manhours')">工時統計</button>
         </div>
  
         <main>
@@ -309,6 +310,18 @@
                                 </div>
                             </div>
                         </div>
+                        
+                        <div class="filter-card" style="padding: 1.2rem; background: var(--surface-light); border: 1px solid var(--border); border-radius: 12px; width: 100%; display: flex; flex-direction: column; gap: 0.75rem;">
+                            <h3 style="margin: 0; color: var(--primary);">📊 匯出市場組維修月報 (PDF)</h3>
+                            <p style="color: var(--text-muted); font-size: 0.85rem; margin: 0;">此報表將包含：封面、每月維修統計趨勢（第一頁，左右兩張 XY 雙軸圖）、客運商與部件統計分析（第二頁，均分三等份左右堆疊圖）。</p>
+                            <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+                                <span style="font-size: 0.9rem; color: white;">選擇報表月份：</span>
+                                <select id="export-monthly-report-select" style="padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: white; width: 150px; outline: none; cursor: pointer;">
+                                    <!-- Populated by JS -->
+                                </select>
+                                <button class="btn-primary" onclick="exportMonthlyReportPdf()">📄 匯出維修月報 PDF</button>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="progress-visualization" style="grid-template-columns: 1fr;">
@@ -396,6 +409,69 @@
                             📈 各部件累計數量 (橫條圖)
                         </h3>
                         <div id="quality-component-chart" style="width: 100%;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab: Manhours -->
+            <div id="tab-manhours" class="tab-content hidden">
+                <div class="stats-header" style="margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h2>⏱️ 工時統計與設定</h2>
+                        <p class="text-muted" style="font-size: 0.9rem; margin-top: 0.25rem;">計算與自訂每個回覆項目的工時（預設為 0.5 小時）</p>
+                    </div>
+                    <div>
+                        <button class="btn-primary" onclick="saveManhoursSettings()">💾 儲存工時設定</button>
+                    </div>
+                </div>
+
+                <div class="quality-filters" style="display: flex; gap: 1.5rem; align-items: center; flex-wrap: wrap; background: var(--surface-light); border: 1px solid var(--border); padding: 1rem; border-radius: 12px; margin-bottom: 1.5rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span style="font-size: 0.9rem; color: var(--primary); font-weight: bold;">📅 日期區間：</span>
+                        <input type="date" id="manhours-start-date" style="padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: white;" onchange="loadManhoursStats()">
+                        <span style="color: var(--text-muted);">至</span>
+                        <input type="date" id="manhours-end-date" style="padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: white;" onchange="loadManhoursStats()">
+                    </div>
+                </div>
+
+                <!-- Summary Cards -->
+                <div class="stats-summary-grid" style="margin-bottom: 1.5rem;">
+                    <div class="summary-card">
+                        <div class="summary-icon">📋</div>
+                        <div class="summary-details">
+                            <span class="summary-label">已完成通報總數</span>
+                            <span id="manhours-total-reports" class="summary-value">0</span>
+                        </div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-icon">⏱️</div>
+                        <div class="summary-details">
+                            <span class="summary-label">總累計工時</span>
+                            <span id="manhours-total-hours" class="summary-value">0.0 hr</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Manhours Table -->
+                <div class="progress-visualization" style="grid-template-columns: 1fr;">
+                    <div class="detail-list-box" style="width: 100%;">
+                        <h3>📋 通報回覆項目工時明細表</h3>
+                        <div class="stats-table-container">
+                            <table class="stats-table" style="width: 100%; border-collapse: collapse;">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 60px; text-align: center;">#</th>
+                                        <th>通報回覆項目 (Unique Reply)</th>
+                                        <th style="width: 120px; text-align: center;">完成次數 (頻率)</th>
+                                        <th style="width: 180px; text-align: center;">單次工時 (小時/次)</th>
+                                        <th style="width: 180px; text-align: center;">總工時小計 (小時)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="manhours-table-body">
+                                    <!-- Populated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
