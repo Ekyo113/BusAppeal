@@ -522,7 +522,7 @@ class ExportService:
             operators = [item[0] for item in sorted_vendors]
             operators.reverse()
             
-            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 2.5), dpi=150)
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4.3), dpi=150)
             
             # Left Subplot
             if not operators:
@@ -546,7 +546,7 @@ class ExportService:
                 ax1.set_xlabel('件數', fontsize=8)
                 ax1.tick_params(axis='x', labelsize=8)
                 ax1.set_title('各客運商部件件數統計', fontsize=9, fontweight='bold')
-                ax1.legend(loc='upper center', bbox_to_anchor=(0.5, -0.35), fontsize=6, ncol=6, framealpha=0.5)
+                ax1.legend(loc='upper center', bbox_to_anchor=(0.5, -0.5), fontsize=6, ncol=6, framealpha=0.5)
                 
             # Right Subplot
             active_components = {k: v for k, v in component_totals.items() if v > 0}
@@ -591,9 +591,9 @@ class ExportService:
         c.setFont(font_name, 16)
         c.drawString(40, height - 40, "二、 各客運商與部件統計分析")
         
-        c.drawImage(ImageReader(row1_img_buf), 30, 560, width=535, height=190)
-        c.drawImage(ImageReader(row2_img_buf), 30, 320, width=535, height=190)
-        c.drawImage(ImageReader(row3_img_buf), 30, 80, width=535, height=190)
+        c.drawImage(ImageReader(row1_img_buf), 30, 530, width=535, height=230)
+        c.drawImage(ImageReader(row2_img_buf), 30, 280, width=535, height=230)
+        c.drawImage(ImageReader(row3_img_buf), 30, 30, width=535, height=230)
         
         c.showPage()
         c.save()
