@@ -324,6 +324,18 @@ class ExportService:
         """
         start_x = (width - sum(col_widths)) / 2  # 置中
         
+        # Determine max lines in headers to adjust header row height dynamically
+        header_lines_list = []
+        for h in headers:
+            if isinstance(h, list):
+                header_lines_list.append(h)
+            elif isinstance(h, str):
+                header_lines_list.append([h])
+            else:
+                header_lines_list.append([str(h)])
+        
+        max_header_lines = max(len(lines) for lines in header_lines_list) if header_lines_list else 1
+        
         # 1. 繪製標題（如果空間不夠，先換頁）
         c.setFont(font_name, 13)
         c.setFillColorRGB(0, 0, 0)
@@ -337,6 +349,9 @@ class ExportService:
         
         # 繪製表頭的輔助函數
         def draw_header(curr_y):
+            nonlocal header_row_height
+            header_row_height = 10 + max_header_lines * 10
+            
             c.setFillColorRGB(0.92, 0.94, 0.98) # 淺藍色背景
             c.rect(start_x, curr_y - header_row_height, sum(col_widths), header_row_height, fill=True, stroke=False)
             c.setFillColorRGB(0, 0, 0)
@@ -351,10 +366,14 @@ class ExportService:
             c.line(start_x, curr_y, start_x, curr_y - header_row_height)
             c.line(start_x + sum(col_widths), curr_y, start_x + sum(col_widths), curr_y - header_row_height)
             
-            c.setFont(font_name, 10)
+            # 用較小字型以容納長/多行標頭
+            c.setFont(font_name, 8.5 if max_header_lines > 1 else 10)
             curr_x = start_x
-            for idx, h in enumerate(headers):
-                c.drawCentredString(curr_x + col_widths[idx]/2, curr_y - header_row_height + 6, h)
+            for idx, lines in enumerate(header_lines_list):
+                total_text_h = len(lines) * 10
+                start_offset = (header_row_height - total_text_h) / 2
+                for line_idx, line in enumerate(lines):
+                    c.drawCentredString(curr_x + col_widths[idx]/2, curr_y - start_offset - 8 - line_idx * 10, line)
                 curr_x += col_widths[idx]
                 if idx < len(headers) - 1:
                     c.line(curr_x, curr_y, curr_x, curr_y - header_row_height)
@@ -877,28 +896,26 @@ class ExportService:
         # ----------------------------------------------------
         # 四、 品情與車號對照分析
         # ----------------------------------------------------
-        desc_groups = {}
-        desc_component = {}
+        group_key_counts = {}  # (desc, comp) -> list of cars
         for r in row2_reports:
             desc = (r.get('description') or '').strip() or '無描述'
             car = (r.get('car_number') or '').strip().upper() or '未知車號'
             comp = (r.get('component') or '').strip() or '未分類'
-            if desc not in desc_groups:
-                desc_groups[desc] = []
-            desc_groups[desc].append(car)
-            desc_component[desc] = comp
+            key = (desc, comp)
+            if key not in group_key_counts:
+                group_key_counts[key] = []
+            group_key_counts[key].append(car)
             
-        # 依發生次數降序、品情名稱排序
-        sorted_desc = sorted(
-            desc_groups.items(),
-            key=lambda x: (-len(x[1]), x[0])
+        # 依發生次數降序、品情名稱、部件名稱排序
+        sorted_groups = sorted(
+            group_key_counts.items(),
+            key=lambda x: (-len(x[1]), x[0][0], x[0][1])
         )
         
         r2_rows = []
-        for desc, cars in sorted_desc:
+        for (desc, comp), cars in sorted_groups:
             unique_cars = sorted(list(set(cars)))
             cars_str = ", ".join(unique_cars)
-            comp = desc_component.get(desc, '未分類')
             r2_rows.append([
                 wrap_text(desc, max_len=21), 
                 wrap_text(comp, max_len=8),
@@ -968,19 +985,19 @@ class ExportService:
                             if car not in sols_history[sol_text] or (comp_at and comp_at < sols_history[sol_text][car]):
                                 sols_history[sol_text][car] = comp_at
                                 
-            # 動態分配欄位寬度 (業者 100, 車號 70, 剩餘 310 分給各方案)
+            # 動態分配欄位寬度 (業者 75, 車號 55, 剩餘 385 分給各方案，總寬度 515)
             num_sols = len(qualifying_sols)
-            sol_col_width = 310 / num_sols
-            col_widths = [100, 70] + [sol_col_width] * num_sols
+            sol_col_width = 385 / num_sols
+            col_widths = [75, 55] + [sol_col_width] * num_sols
             
-            # 根據分配欄寬，動態決定標頭長度避免重疊 (中文字寬度在字型9-10點下約為9.5點)
-            headers = ["業者", "車號"]
+            # 標題折行處理
+            headers = [["業者"], ["車號"]]
             for sol in qualifying_sols:
-                max_chars = max(3, int(sol_col_width / 9.5))
-                if len(sol) > max_chars:
-                    headers.append(sol[:max_chars - 1] + "..")
-                else:
-                    headers.append(sol)
+                # 根據分配欄寬，動態決定折行字數 (中文字寬度在字型8.5下約為8.0點)
+                max_chars = max(4, int(sol_col_width / 8.0))
+                # 將方案標題折行，使其完全顯示，不加 ".."
+                wrapped_sol = wrap_text(sol, max_len=max_chars)
+                headers.append(wrapped_sol)
             
             r3_rows = []
             for bus in sorted_buses:
@@ -1004,7 +1021,8 @@ class ExportService:
                 headers, 
                 col_widths, 
                 r3_rows, 
-                y, width, height
+                y, width, height,
+                font_size=8
             )
             
         # ----------------------------------------------------
