@@ -320,12 +320,22 @@ async def save_reply_hours(items: list[ReplyHourItem], token: str = Header(None)
     return {"status": "success"}
 
 @router.get("/export/monthly_report")
-async def get_monthly_report(month: str = None, token: str = Header(None)):
+async def get_monthly_report(month: str = None, design_sols: str = None, token: str = Header(None)):
     """
     導出 (特定月份)市場組維修報表 PDF
     month format: "YYYY-MM" (例如 "2026-05")
     """
     verify_token(token)
+    
+    # 解析選取的設計修改方案
+    import json
+    selected_design_sols = []
+    if design_sols:
+        try:
+            selected_design_sols = json.loads(design_sols)
+        except Exception:
+            selected_design_sols = [design_sols]
+            
     if not month:
         tz = pytz.timezone('Asia/Taipei')
         month = datetime.now(tz).strftime('%Y-%m')
@@ -355,7 +365,8 @@ async def get_monthly_report(month: str = None, token: str = Header(None)):
     pdf_buffer = ExportService.generate_monthly_report_pdf(
         reports, month, start_date, end_date,
         all_time_design_reports=all_time_design_reports,
-        monitored_buses=monitored_buses
+        monitored_buses=monitored_buses,
+        selected_design_sols=selected_design_sols
     )
     
     filename = f"市場組維修報表_{month}.pdf"

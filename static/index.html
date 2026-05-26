@@ -316,11 +316,17 @@
                         <div class="filter-card" style="padding: 1.2rem; background: var(--surface-light); border: 1px solid var(--border); border-radius: 12px; width: 100%; display: flex; flex-direction: column; gap: 0.75rem;">
                             <h3 style="margin: 0; color: var(--primary);">📊 匯出市場組維修月報 (PDF)</h3>
                             <p style="color: var(--text-muted); font-size: 0.85rem; margin: 0;">此報表將包含：封面、每月維修統計趨勢（第一頁，左右兩張 XY 雙軸圖）、客運商與部件統計分析（第二頁，均分三等份左右堆疊圖）。</p>
-                            <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+                            <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; width: 100%;">
                                 <span style="font-size: 0.9rem; color: white;">選擇報表月份：</span>
                                 <select id="export-monthly-report-select" style="padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: white; width: 150px; outline: none; cursor: pointer;">
                                     <!-- Populated by JS -->
                                 </select>
+                                
+                                <span style="font-size: 0.9rem; color: white; margin-left: 0.5rem;">額外加入對照表方案：</span>
+                                <div id="export-design-checkboxes" style="display: flex; gap: 0.8rem; align-items: center; flex-wrap: wrap; background: rgba(255,255,255,0.05); padding: 0.4rem 0.8rem; border-radius: 6px; max-height: 120px; overflow-y: auto; border: 1px solid var(--border); min-width: 200px; flex-grow: 1;">
+                                    <span style="color: var(--text-muted); font-size: 0.85rem;">載入中...</span>
+                                </div>
+                                
                                 <button class="btn-primary" onclick="exportMonthlyReportPdf()">📄 匯出維修月報 PDF</button>
                             </div>
                         </div>

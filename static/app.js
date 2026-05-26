@@ -296,7 +296,7 @@ function viewDetail(id) {
                         <option value="BMS" ${report.component === 'BMS' ? 'selected' : ''}>BMS</option>
                         <option value="冷氣" ${report.component === '冷氣' ? 'selected' : ''}>冷氣</option>
                         <option value="電子影像" ${report.component === '電子影像' ? 'selected' : ''}>電子影像</option>
-                        <option value="方向燈座" ${report.component === '方向燈座' ? 'selected' : ''}>方向燈座</option>
+                        <option value="方向燈座及撥桿" ${report.component === '方向燈座及撥桿' ? 'selected' : ''}>方向燈座及撥桿</option>
                         <option value="車門" ${report.component === '車門' ? 'selected' : ''}>車門</option>
                         <option value="車裝" ${report.component === '車裝' ? 'selected' : ''}>車裝</option>
                         <option value="車體外裝" ${report.component === '車體外裝' ? 'selected' : ''}>車體外裝</option>
@@ -1555,6 +1555,27 @@ function loadExportTab() {
         }
     }
 
+    // Populate design solutions checkboxes
+    const checkboxContainer = document.getElementById('export-design-checkboxes');
+    if (checkboxContainer) {
+        const designSols = [...new Set(
+            allReports
+                .filter(r => r.status === '已完成' && r.solution_type === '設計修改')
+                .map(r => (r.solution || '').trim())
+                .filter(Boolean)
+        )].sort();
+
+        if (designSols.length === 0) {
+            checkboxContainer.innerHTML = '<span style="color: var(--text-muted); font-size: 0.85rem;">暫無已完成的設計修改方案</span>';
+        } else {
+            checkboxContainer.innerHTML = designSols.map(sol => `
+                <label style="display: inline-flex; align-items: center; gap: 0.3rem; cursor: pointer; color: white; font-size: 0.85rem; user-select: none;">
+                    <input type="checkbox" value="${sol}" class="design-sol-checkbox"> ${sol}
+                </label>
+            `).join('');
+        }
+    }
+
     if (!exportInitialized) {
         resetExportSelection();
         exportInitialized = true;
@@ -1973,7 +1994,7 @@ async function loadQualityStats() {
     });
 
     // 3. 定義部件選項清單 (用於堆疊圖 Series)
-    const componentsList = ["TMS", "動力", "BMS", "冷氣", "電子影像", "方向燈座", "車門", "車裝", "車體外裝", "燈光", "底盤件", "儀錶", "其他", "未分類"];
+    const componentsList = ["TMS", "動力", "BMS", "冷氣", "電子影像", "方向燈座及撥桿", "車門", "車裝", "車體外裝", "燈光", "底盤件", "儀錶", "其他", "未分類"];
     
     // 4. 初始化客運商統計資料結構
     const vendorStats = {};
@@ -2085,7 +2106,7 @@ async function loadQualityStats() {
                     '#10b981', // BMS (綠)
                     '#0ea5e9', // 冷氣 (淺藍)
                     '#d946ef', // 電子影像 (洋紅)
-                    '#ec4899', // 方向燈座 (粉)
+                    '#ec4899', // 方向燈座及撥桿 (粉)
                     '#8b5cf6', // 車門 (紫)
                     '#06b6d4', // 車裝 (青)
                     '#84cc16', // 車體外裝 (黃綠)
@@ -2206,7 +2227,7 @@ async function loadQualityStats() {
                     '#10b981', // BMS (綠)
                     '#0ea5e9', // 冷氣 (淺藍)
                     '#d946ef', // 電子影像 (洋紅)
-                    '#ec4899', // 方向燈座 (粉)
+                    '#ec4899', // 方向燈座及撥桿 (粉)
                     '#8b5cf6', // 車門 (紫)
                     '#06b6d4', // 車裝 (青)
                     '#84cc16', // 車體外裝 (黃綠)
@@ -2468,10 +2489,20 @@ async function exportMonthlyReportPdf() {
     const month = select.value;
     const token = document.getElementById('admin-token').value;
     
+    // Get checked design solutions
+    const checkedSols = [];
+    const checkboxes = document.querySelectorAll('#export-design-checkboxes .design-sol-checkbox:checked');
+    checkboxes.forEach(cb => {
+        checkedSols.push(cb.value);
+    });
+    
     showToast("報表繪製與 PDF 下載中，請稍候...", "success");
     
     try {
-        const url = `/admin/export/monthly_report?month=${month}`;
+        let url = `/admin/export/monthly_report?month=${month}`;
+        if (checkedSols.length > 0) {
+            url += `&design_sols=${encodeURIComponent(JSON.stringify(checkedSols))}`;
+        }
         const res = await fetch(url, {
             headers: { 'token': token }
         });

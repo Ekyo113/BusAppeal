@@ -63,10 +63,17 @@ monitored_buses = [
 
 try:
     print("Generating monthly PDF report...")
+    selected_design_sols = ["加強型冷氣支架", "超薄型前擋泥板防噴優化方案"]
+    
+    # 增加測試資料：額外選取的方案的歷史完成記錄，驗證是否顯示打勾與日期
+    all_time_design_reports.append({"completed_at": "2026-05-20T12:00:00", "car_number": "EAA-901", "solution_type": "設計修改", "solution": "超薄型前擋泥板防噴優化方案"})
+    all_time_design_reports.append({"completed_at": "2026-05-22T12:00:00", "car_number": "EAA-905", "solution_type": "設計修改", "solution": "超薄型前擋泥板防噴優化方案"})
+
     pdf_buffer = ExportService.generate_monthly_report_pdf(
         reports, "2026-05", "2026-01-01", "2026-05-31",
         all_time_design_reports=all_time_design_reports,
-        monitored_buses=monitored_buses
+        monitored_buses=monitored_buses,
+        selected_design_sols=selected_design_sols
     )
     
     # Save buffer to a local file

@@ -435,7 +435,7 @@ class ExportService:
         return y
 
     @staticmethod
-    def generate_monthly_report_pdf(reports, month: str, start_date: str, end_date: str, all_time_design_reports=None, monitored_buses=None):
+    def generate_monthly_report_pdf(reports, month: str, start_date: str, end_date: str, all_time_design_reports=None, monitored_buses=None, selected_design_sols=None):
         import os
         import io
         from datetime import datetime, timedelta
@@ -678,14 +678,14 @@ class ExportService:
         
         # 4. Page 2: Operator & Component breakdown
         month_reports = [r for r in reports if r.get('completed_at', '').startswith(month)]
-        components_list = ["TMS", "動力", "BMS", "冷氣", "電子影像", "方向燈座", "車門", "車裝", "車體外裝", "燈光", "底盤件", "儀錶", "其他", "未分類"]
+        components_list = ["TMS", "動力", "BMS", "冷氣", "電子影像", "方向燈座及撥桿", "車門", "車裝", "車體外裝", "燈光", "底盤件", "儀錶", "其他", "未分類"]
         component_colors = {
             "TMS": '#3b82f6',
             "動力": '#f59e0b',
             "BMS": '#10b981',
             "冷氣": '#0ea5e9',
             "電子影像": '#d946ef',
-            "方向燈座": '#ec4899',
+            "方向燈座及撥桿": '#ec4899',
             "車門": '#8b5cf6',
             "車裝": '#06b6d4',
             "車體外裝": '#84cc16',
@@ -911,7 +911,7 @@ class ExportService:
         )
         
         # ----------------------------------------------------
-        # 五、 設計修改累計完成對照 (重複次數 >= 5)
+        # 五、 設計修改累計完成對照 (重複次數 >= 5 或使用者勾選)
         # ----------------------------------------------------
         design_counts = {}
         for r in month_reports:
@@ -921,6 +921,13 @@ class ExportService:
                     design_counts[sol] = design_counts.get(sol, 0) + 1
                     
         qualifying_sols = [sol for sol, count in design_counts.items() if count >= 5]
+        
+        # 併入外部額外選取的設計修改方案
+        if selected_design_sols:
+            for sol in selected_design_sols:
+                sol_cleaned = (sol or '').strip()
+                if sol_cleaned and sol_cleaned not in qualifying_sols:
+                    qualifying_sols.append(sol_cleaned)
         
         if qualifying_sols:
             c.showPage()
@@ -951,7 +958,14 @@ class ExportService:
             sol_col_width = 310 / num_sols
             col_widths = [100, 70] + [sol_col_width] * num_sols
             
-            headers = ["業者", "車號"] + [sol[:10] + '...' if len(sol) > 11 else sol for sol in qualifying_sols]
+            # 根據分配欄寬，動態決定標頭長度避免重疊 (中文字寬度在字型9-10點下約為9.5點)
+            headers = ["業者", "車號"]
+            for sol in qualifying_sols:
+                max_chars = max(3, int(sol_col_width / 9.5))
+                if len(sol) > max_chars:
+                    headers.append(sol[:max_chars - 1] + "..")
+                else:
+                    headers.append(sol)
             
             r3_rows = []
             for bus in sorted_buses:
@@ -975,6 +989,55 @@ class ExportService:
                 headers, 
                 col_widths, 
                 r3_rows, 
+                y, width, height
+            )
+            
+        # ----------------------------------------------------
+        # 附錄、 當月新增項目明細
+        # ----------------------------------------------------
+        appendix_reports = sorted(
+            [r for r in reports if r.get('completed_at', '').startswith(month)],
+            key=lambda x: x.get('completed_at') or ''
+        )
+        
+        if appendix_reports:
+            c.showPage()
+            y = height - 40
+            c.setFont(font_name, 16)
+            c.drawString(40, y, "附錄、 當月新增項目明細")
+            y -= 30
+            
+            appendix_rows = []
+            for r in appendix_reports:
+                comp_at = r.get('completed_at') or ''
+                date_str = comp_at[5:10] if len(comp_at) >= 10 else comp_at
+                
+                vendor = r.get('vendor_name') or '未知客運'
+                car = r.get('car_number') or ''
+                mileage = r.get('mileage')
+                mileage_str = f"{int(mileage)}" if mileage is not None else ""
+                desc = r.get('description') or ''
+                sol = r.get('solution') or ''
+                
+                row_cells = [
+                    [date_str],
+                    wrap_text(vendor, max_len=6),
+                    wrap_text(car, max_len=6),
+                    wrap_text(mileage_str, max_len=5),
+                    wrap_text(desc, max_len=15),
+                    wrap_text(sol, max_len=16)
+                ]
+                appendix_rows.append(row_cells)
+                
+            col_widths = [40, 60, 55, 45, 155, 160]
+            headers = ["日期", "業者", "車號", "里程", "問題描述", "處理方案"]
+            
+            y = ExportService._draw_table_with_pagination(
+                c, font_name, 
+                "當月新增項目明細表", 
+                headers, 
+                col_widths, 
+                appendix_rows, 
                 y, width, height
             )
             
