@@ -878,12 +878,15 @@ class ExportService:
         # 四、 品情與車號對照分析
         # ----------------------------------------------------
         desc_groups = {}
+        desc_component = {}
         for r in row2_reports:
             desc = (r.get('description') or '').strip() or '無描述'
             car = (r.get('car_number') or '').strip().upper() or '未知車號'
+            comp = (r.get('component') or '').strip() or '未分類'
             if desc not in desc_groups:
                 desc_groups[desc] = []
             desc_groups[desc].append(car)
+            desc_component[desc] = comp
             
         # 依發生次數降序、品情名稱排序
         sorted_desc = sorted(
@@ -895,8 +898,10 @@ class ExportService:
         for desc, cars in sorted_desc:
             unique_cars = sorted(list(set(cars)))
             cars_str = ", ".join(unique_cars)
+            comp = desc_component.get(desc, '未分類')
             r2_rows.append([
-                wrap_text(desc, max_len=22), 
+                wrap_text(desc, max_len=21), 
+                wrap_text(comp, max_len=8),
                 wrap_vehicles(cars_str, max_len=18), 
                 [f"{len(cars)} 件"]
             ])
@@ -914,8 +919,8 @@ class ExportService:
         y = ExportService._draw_table_with_pagination(
             c, font_name, 
             "品情項目 v.s. 車號對照表 (由多到少排序)", 
-            ["品情項目 (問題描述)", "對應車號", "完成數量"], 
-            [220, 170, 90], 
+            ["品情項目 (問題描述)", "部件", "對應車號", "完成數量"], 
+            [200, 80, 170, 65], 
             r2_rows, 
             y, width, height
         )
