@@ -317,7 +317,96 @@ class ExportService:
                 print(f"Failed to add font to matplotlib: {e}")
 
     @staticmethod
-    def generate_monthly_report_pdf(reports, month: str, start_date: str, end_date: str):
+    def _draw_table_with_pagination(c, font_name, title, headers, col_widths, data_rows, y, width, height, margin_bottom=50, margin_top=40, row_height=20):
+        """
+        在 canvas 上繪製表格，並具備自動分頁功能。
+        """
+        start_x = (width - sum(col_widths)) / 2  # 置中
+        
+        # 1. 繪製標題（如果空間不夠，先換頁）
+        c.setFont(font_name, 13)
+        c.setFillColorRGB(0, 0, 0)
+        
+        if y < margin_bottom + 45:
+            c.showPage()
+            y = height - margin_top
+            
+        c.drawString(40, y, title)
+        y -= 25
+        
+        # 繪製表頭的輔助函數
+        def draw_header(curr_y):
+            c.setFillColorRGB(0.92, 0.94, 0.98) # 淺藍色背景
+            c.rect(start_x, curr_y - row_height, sum(col_widths), row_height, fill=True, stroke=False)
+            c.setFillColorRGB(0, 0, 0)
+            c.setStrokeColorRGB(0.7, 0.7, 0.7)
+            c.setLineWidth(0.5)
+            
+            # 水平線
+            c.line(start_x, curr_y, start_x + sum(col_widths), curr_y)
+            c.line(start_x, curr_y - row_height, start_x + sum(col_widths), curr_y - row_height)
+            
+            # 兩側垂直線
+            c.line(start_x, curr_y, start_x, curr_y - row_height)
+            c.line(start_x + sum(col_widths), curr_y, start_x + sum(col_widths), curr_y - row_height)
+            
+            c.setFont(font_name, 10)
+            curr_x = start_x
+            for idx, h in enumerate(headers):
+                c.drawCentredString(curr_x + col_widths[idx]/2, curr_y - row_height + 6, h)
+                curr_x += col_widths[idx]
+                if idx < len(headers) - 1:
+                    c.line(curr_x, curr_y, curr_x, curr_y - row_height)
+            return curr_y - row_height
+            
+        # 繪製初始表頭
+        y = draw_header(y)
+        
+        c.setFont(font_name, 9)
+        for row in data_rows:
+            if y < margin_bottom + row_height:
+                # 換頁
+                c.showPage()
+                y = height - margin_top
+                c.setFont(font_name, 11)
+                c.drawString(40, y, f"{title} (續)")
+                y -= 25
+                y = draw_header(y)
+                c.setFont(font_name, 9)
+                
+            # 畫下一列資料
+            # 水平分隔線
+            c.line(start_x, y - row_height, start_x + sum(col_widths), y - row_height)
+            
+            curr_x = start_x
+            for idx, val in enumerate(row):
+                val_str = str(val or '')
+                if val_str == '✓':
+                    # Draw a custom checkmark using vector lines to ensure rendering
+                    cx = curr_x + col_widths[idx]/2
+                    cy = y - row_height/2
+                    c.saveState()
+                    c.setLineWidth(1.5)
+                    c.setStrokeColorRGB(0.1, 0.6, 0.1) # Greenish color
+                    c.line(cx - 4, cy - 1, cx - 1, cy - 4)
+                    c.line(cx - 1, cy - 4, cx + 4, cy + 3)
+                    c.restoreState()
+                else:
+                    c.drawCentredString(curr_x + col_widths[idx]/2, y - row_height + 6, val_str)
+                curr_x += col_widths[idx]
+                if idx < len(headers) - 1:
+                    c.line(curr_x, y, curr_x, y - row_height)
+                    
+            # 兩側垂直線
+            c.line(start_x, y, start_x, y - row_height)
+            c.line(start_x + sum(col_widths), y, start_x + sum(col_widths), y - row_height)
+            
+            y -= row_height
+            
+        return y
+
+    @staticmethod
+    def generate_monthly_report_pdf(reports, month: str, start_date: str, end_date: str, all_time_design_reports=None, monitored_buses=None):
         import os
         import io
         from datetime import datetime, timedelta
@@ -337,12 +426,91 @@ class ExportService:
         except ValueError:
             target_year, target_month_num = datetime.now().year, datetime.now().month
 
+        # Count for cover table
+        this_month_prefix = month # e.g. "2026-05"
+        
+        m_quality = 0
+        y_quality = 0
+        m_aftersales = 0
+        y_aftersales = 0
+        m_design = 0
+        y_design = 0
+        
+        for r in reports:
+            comp_at = r.get('completed_at') or ''
+            is_this_month = comp_at.startswith(this_month_prefix)
+            sol_type = r.get('solution_type') or ''
+            
+            if sol_type in ['維修', '更換']:
+                y_quality += 1
+                if is_this_month:
+                    m_quality += 1
+            elif sol_type == '售服':
+                y_aftersales += 1
+                if is_this_month:
+                    m_aftersales += 1
+            elif sol_type == '設計修改':
+                y_design += 1
+                if is_this_month:
+                    m_design += 1
+
         # 1. Page 1: Cover
         c.setFont(font_name, 24)
-        c.drawCentredString(width/2, height/2 + 50, f"({target_month_num}月)市場組維修報表")
+        c.drawCentredString(width/2, height/2 + 130, f"({target_month_num}月)市場組維修報表")
         
         c.setFont(font_name, 12)
-        c.drawCentredString(width/2, height/2 - 10, f"產出日期：{datetime.now().strftime('%Y-%m-%d')}")
+        c.drawCentredString(width/2, height/2 + 80, f"產出日期：{datetime.now().strftime('%Y-%m-%d')}")
+        
+        # Draw Cover Summary Table
+        cover_y = height/2 + 20
+        row_h = 22
+        col_w = [180, 150, 150]
+        start_x = (width - sum(col_w)) / 2
+        
+        # Header background
+        c.setFillColorRGB(0.92, 0.94, 0.98)
+        c.rect(start_x, cover_y - row_h, sum(col_w), row_h, fill=True, stroke=False)
+        c.setFillColorRGB(0, 0, 0)
+        c.setStrokeColorRGB(0.7, 0.7, 0.7)
+        c.setLineWidth(0.5)
+        
+        # Header borders
+        c.line(start_x, cover_y, start_x + sum(col_w), cover_y)
+        c.line(start_x, cover_y - row_h, start_x + sum(col_w), cover_y - row_h)
+        c.line(start_x, cover_y, start_x, cover_y - row_h)
+        c.line(start_x + sum(col_w), cover_y, start_x + sum(col_w), cover_y - row_h)
+        
+        # Header text
+        c.setFont(font_name, 10)
+        headers = ["項目", "本月新增", "今年累計"]
+        curr_x = start_x
+        for i, h in enumerate(headers):
+            c.drawCentredString(curr_x + col_w[i]/2, cover_y - row_h + 7, h)
+            curr_x += col_w[i]
+            if i < len(headers) - 1:
+                c.line(curr_x, cover_y, curr_x, cover_y - row_h)
+                
+        # Rows
+        cover_rows = [
+            ["品情 (維修+更換)", f"{m_quality} 件", f"{y_quality} 件"],
+            ["售服", f"{m_aftersales} 件", f"{y_aftersales} 件"],
+            ["設計修改", f"{m_design} 件", f"{y_design} 件"]
+        ]
+        
+        cover_y -= row_h
+        for row in cover_rows:
+            c.line(start_x, cover_y - row_h, start_x + sum(col_w), cover_y - row_h)
+            c.line(start_x, cover_y, start_x, cover_y - row_h)
+            c.line(start_x + sum(col_w), cover_y, start_x + sum(col_w), cover_y - row_h)
+            
+            curr_x = start_x
+            for i, val in enumerate(row):
+                c.drawCentredString(curr_x + col_w[i]/2, cover_y - row_h + 7, val)
+                curr_x += col_w[i]
+                if i < len(headers) - 1:
+                    c.line(curr_x, cover_y, curr_x, cover_y - row_h)
+            cover_y -= row_h
+            
         c.showPage()
         
         # 2. Setup Matplotlib Font
@@ -546,7 +714,7 @@ class ExportService:
                 ax1.set_xlabel('件數', fontsize=8)
                 ax1.tick_params(axis='x', labelsize=8)
                 ax1.set_title('各客運商部件件數統計', fontsize=9, fontweight='bold')
-                ax1.legend(loc='upper center', bbox_to_anchor=(0.5, -0.5), fontsize=6, ncol=6, framealpha=0.5)
+                ax1.legend(loc='upper center', bbox_to_anchor=(0.5, -0.4), fontsize=6, ncol=6, framealpha=0.5)
                 
             # Right Subplot
             active_components = {k: v for k, v in component_totals.items() if v > 0}
@@ -595,6 +763,155 @@ class ExportService:
         c.drawImage(ImageReader(row2_img_buf), 30, 280, width=535, height=230)
         c.drawImage(ImageReader(row3_img_buf), 30, 30, width=535, height=230)
         
+        c.showPage() # Commits Page 3. Now we are on Page 4.
+
+        # ----------------------------------------------------
+        # 三、 客運與品情對照分析
+        # ----------------------------------------------------
+        # 1. 統計客運商通報總數量以便排序
+        vendor_total_counts = {}
+        for r in row2_reports:
+            vendor = r.get('vendor_name') or '未知客運'
+            vendor_total_counts[vendor] = vendor_total_counts.get(vendor, 0) + 1
+            
+        # 依客運商通報總數降序、客運商名稱、車牌、日期排序
+        sorted_reports_r1 = sorted(
+            row2_reports,
+            key=lambda r: (
+                -vendor_total_counts.get(r.get('vendor_name') or '未知客運', 0),
+                r.get('vendor_name') or '未知客運',
+                (r.get('car_number') or '').strip().upper(),
+                r.get('completed_at') or ''
+            )
+        )
+        
+        r1_rows = []
+        for r in sorted_reports_r1:
+            vendor = r.get('vendor_name') or '未知客運'
+            car = (r.get('car_number') or '').strip().upper() or '未知車號'
+            desc = (r.get('description') or '').strip() or '無描述'
+            desc_truncated = desc[:24] + '...' if len(desc) > 25 else desc
+            r1_rows.append([vendor, car, desc_truncated])
+        
+        y = height - 40
+        c.setFont(font_name, 16)
+        c.drawString(40, y, "三、 客運商與品情對照分析")
+        y -= 30
+        
+        y = ExportService._draw_table_with_pagination(
+            c, font_name, 
+            "客運商 v.s. 品情項目對照表 (由多到少排序)", 
+            ["客運商", "車號", "品情項目 (問題描述)"], 
+            [140, 100, 240], 
+            r1_rows, 
+            y, width, height
+        )
+        
+        # ----------------------------------------------------
+        # 四、 品情與車號對照分析
+        # ----------------------------------------------------
+        desc_groups = {}
+        for r in row2_reports:
+            desc = (r.get('description') or '').strip() or '無描述'
+            car = (r.get('car_number') or '').strip().upper() or '未知車號'
+            if desc not in desc_groups:
+                desc_groups[desc] = []
+            desc_groups[desc].append(car)
+            
+        # 依發生次數降序、品情名稱排序
+        sorted_desc = sorted(
+            desc_groups.items(),
+            key=lambda x: (-len(x[1]), x[0])
+        )
+        
+        r2_rows = []
+        for desc, cars in sorted_desc:
+            unique_cars = sorted(list(set(cars)))
+            cars_str = ", ".join(unique_cars)
+            desc_truncated = desc[:24] + '...' if len(desc) > 25 else desc
+            cars_truncated = cars_str[:20] + '...' if len(cars_str) > 21 else cars_str
+            r2_rows.append([desc_truncated, cars_truncated, f"{len(cars)} 件"])
+        
+        if y < 150:
+            c.showPage()
+            y = height - 40
+        else:
+            y -= 40
+            
+        c.setFont(font_name, 16)
+        c.drawString(40, y, "四、 品情與車號對照分析")
+        y -= 30
+        
+        y = ExportService._draw_table_with_pagination(
+            c, font_name, 
+            "品情項目 v.s. 車號對照表 (由多到少排序)", 
+            ["品情項目 (問題描述)", "對應車號", "完成數量"], 
+            [220, 170, 90], 
+            r2_rows, 
+            y, width, height
+        )
+        
+        # ----------------------------------------------------
+        # 五、 設計修改累計完成對照 (重複次數 >= 5)
+        # ----------------------------------------------------
+        design_counts = {}
+        for r in month_reports:
+            if r.get('solution_type') == '設計修改':
+                sol = (r.get('solution') or '').strip()
+                if sol:
+                    design_counts[sol] = design_counts.get(sol, 0) + 1
+                    
+        qualifying_sols = [sol for sol, count in design_counts.items() if count >= 5]
+        
+        if qualifying_sols:
+            c.showPage()
+            y = height - 40
+            c.setFont(font_name, 16)
+            c.drawString(40, y, "五、 設計修改累計完成對照")
+            y -= 30
+            
+            history_reports = all_time_design_reports or []
+            buses = monitored_buses or []
+            sorted_buses = sorted(buses, key=lambda b: (b.get('vendor_name') or '', b.get('plate_number') or ''))
+            
+            for sol_text in qualifying_sols:
+                matching_history = {}
+                for hr in history_reports:
+                    hist_sol = (hr.get('solution') or '').strip()
+                    if hist_sol == sol_text:
+                        car = (hr.get('car_number') or '').strip().upper()
+                        if car:
+                            comp_at = hr.get('completed_at') or ''
+                            if car not in matching_history or (comp_at and comp_at < matching_history[car]):
+                                matching_history[car] = comp_at
+                                
+                r3_rows = []
+                for bus in sorted_buses:
+                    vendor = bus.get('vendor_name') or '未知客運'
+                    plate = (bus.get('plate_number') or '').strip().upper()
+                    
+                    date_str = '-'
+                    status_str = ''
+                    if plate in matching_history:
+                        comp_at = matching_history[plate]
+                        if comp_at and len(comp_at) >= 10:
+                            date_str = comp_at[5:10] # MM-DD
+                        elif comp_at:
+                            date_str = comp_at
+                        status_str = '✓'
+                        
+                    r3_rows.append([vendor, plate, date_str, status_str])
+                
+                y = ExportService._draw_table_with_pagination(
+                    c, font_name, 
+                    f"設計修改累計對照表 — {sol_text[:35]}", 
+                    ["業者", "車號", "完成日期 (MM-DD)", "是否完成"], 
+                    [150, 110, 110, 110], 
+                    r3_rows, 
+                    y, width, height
+                )
+                y -= 40
+                
         c.showPage()
         c.save()
         buffer.seek(0)

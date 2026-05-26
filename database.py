@@ -274,6 +274,32 @@ class Database:
             return []
 
     @classmethod
+    def get_all_completed_design_reports(cls):
+        """
+        獲取歷史上所有已完成的設計修改紀錄，並關聯客運公司名稱
+        """
+        client = cls.get_client()
+        try:
+            res = client.table('reports').select('*').eq('status', '已完成').eq('solution_type', '設計修改').execute()
+            reports = res.data
+            
+            # 關聯客運公司 (使用 monitored_buses 表)
+            vendors = cls.get_bus_vendors()
+            for r in reports:
+                r['vendor_name'] = '未知客運'
+                car = (r.get('car_number', '') or '').strip().upper()
+                for v in vendors:
+                    plate = (v.get('plate_number', '') or '').strip().upper()
+                    if plate and plate == car:
+                        r['vendor_name'] = v.get('vendor_name', '未知客運')
+                        break
+            
+            return reports
+        except Exception as e:
+            print(f"DB Error get_all_completed_design_reports: {e}")
+            return []
+
+    @classmethod
     def get_reports_by_ids(cls, ids: list[str]):
         """
         獲取特定 ID 列表的通報資料，並關聯客運公司
