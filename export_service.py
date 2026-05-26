@@ -852,7 +852,13 @@ class ExportService:
             vendor = r.get('vendor_name') or '未知客運'
             car = (r.get('car_number') or '').strip().upper() or '未知車號'
             desc = (r.get('description') or '').strip() or '無描述'
-            r1_rows.append([[vendor], [car], wrap_text(desc, max_len=24)])
+            comp = (r.get('component') or '').strip() or '未分類'
+            r1_rows.append([
+                wrap_text(vendor, max_len=10),
+                wrap_text(car, max_len=12),
+                wrap_text(desc, max_len=26),
+                wrap_text(comp, max_len=8)
+            ])
         
         y = height - 40
         c.setFont(font_name, 16)
@@ -862,8 +868,8 @@ class ExportService:
         y = ExportService._draw_table_with_pagination(
             c, font_name, 
             "客運商 v.s. 品情項目對照表 (由多到少排序)", 
-            ["客運商", "車號", "品情項目 (問題描述)"], 
-            [140, 100, 240], 
+            ["客運商", "車號", "品情項目 (問題描述)", "部件"], 
+            [100, 85, 250, 80], 
             r1_rows, 
             y, width, height
         )

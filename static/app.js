@@ -2146,10 +2146,52 @@ async function loadQualityStats() {
                 },
                 tooltip: {
                     theme: 'dark',
-                    y: {
-                        formatter: function (val) {
-                            return val + " 件";
+                    custom: function({series, seriesIndex, dataPointIndex, w}) {
+                        const vendor = w.config.xaxis.categories[dataPointIndex];
+                        const comp = w.config.series[seriesIndex].name;
+                        const count = series[seriesIndex][dataPointIndex];
+                        
+                        // Find matching reports in the active filtered array
+                        const matches = filtered.filter(r => {
+                            let rVendor = '未知客運';
+                            const car = (r.car_number || '').trim();
+                            if (monitoredBuses && monitoredBuses.length > 0) {
+                                const found = monitoredBuses.find(b => (b.plate_number || '').trim() === car);
+                                if (found) {
+                                    rVendor = found.vendor_name || '未知客運';
+                                }
+                            }
+                            
+                            let rComp = (r.component || '').trim();
+                            if (!rComp) {
+                                rComp = '未分類';
+                            } else if (!componentsList.includes(rComp)) {
+                                rComp = '其他';
+                            }
+                            
+                            return rVendor === vendor && rComp === comp;
+                        });
+                        
+                        let detailsHtml = '';
+                        if (matches.length > 0) {
+                            detailsHtml = '<div style="margin-top: 5px; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 5px; font-size: 11px; max-height: 150px; overflow-y: auto; text-align: left; line-height: 1.4;">' +
+                                matches.map(r => {
+                                    const car = r.car_number || '未知車號';
+                                    const sol = r.solution || r.reply || '-';
+                                    return `<div style="margin-bottom: 2px;">• <b>${car}</b>: ${sol}</div>`;
+                                }).join('') +
+                                '</div>';
                         }
+                        
+                        const color = w.config.colors[seriesIndex];
+                        return `<div class="apexcharts-active-tooltip" style="padding: 10px; background: rgba(30, 41, 59, 0.95); border: 1px solid #475569; border-radius: 6px; color: #fff;">` +
+                            `<div style="font-weight: bold; font-size: 12px; margin-bottom: 3px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 3px;">${vendor}</div>` +
+                            `<div style="display: flex; align-items: center; gap: 5px; font-size: 12px;">` +
+                                `<span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${color};"></span>` +
+                                `<span>${comp}: <b>${count} 件</b></span>` +
+                            `</div>` +
+                            detailsHtml +
+                            `</div>`;
                     }
                 },
                 fill: {
@@ -2270,10 +2312,40 @@ async function loadQualityStats() {
                 },
                 tooltip: {
                     theme: 'dark',
-                    y: {
-                        formatter: function (val) {
-                            return val + " 件";
+                    custom: function({series, seriesIndex, dataPointIndex, w}) {
+                        const comp = w.config.xaxis.categories[dataPointIndex];
+                        const count = series[seriesIndex][dataPointIndex];
+                        
+                        // Find matching reports in the active filtered array
+                        const matches = filtered.filter(r => {
+                            let rComp = (r.component || '').trim();
+                            if (!rComp) {
+                                rComp = '未分類';
+                            } else if (!componentsList.includes(rComp)) {
+                                rComp = '其他';
+                            }
+                            return rComp === comp;
+                        });
+                        
+                        // Get unique sorted vehicle numbers
+                        const cars = [...new Set(matches.map(r => r.car_number).filter(Boolean))].sort();
+                        let detailsHtml = '';
+                        if (cars.length > 0) {
+                            detailsHtml = '<div style="margin-top: 5px; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 5px; font-size: 11px; text-align: left; line-height: 1.4;">' +
+                                `<b>車號：</b>${cars.join(', ')}` +
+                                '</div>';
                         }
+                        
+                        // Get the color for this component
+                        const color = w.config.colors[dataPointIndex % w.config.colors.length];
+                        
+                        return `<div class="apexcharts-active-tooltip" style="padding: 10px; background: rgba(30, 41, 59, 0.95); border: 1px solid #475569; border-radius: 6px; color: #fff;">` +
+                            `<div style="display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: bold;">` +
+                                `<span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${color};"></span>` +
+                                `<span>${comp}: <b>${count} 件</b></span>` +
+                            `</div>` +
+                            detailsHtml +
+                            `</div>`;
                     }
                 },
                 legend: {
