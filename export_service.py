@@ -732,8 +732,12 @@ class ExportService:
                     comp_data = [vendor_stats[op][comp] for op in operators]
                     if sum(comp_data) > 0:
                         ax1.barh(y_pos, comp_data, left=left_accum, label=comp, color=component_colors.get(comp, '#9ca3af'), height=0.55)
+                        # 在各部件長條區段中繪製數量數字
                         for i in range(len(operators)):
-                            left_accum[i] += comp_data[i]
+                            val = comp_data[i]
+                            if val > 0:
+                                ax1.text(left_accum[i] + val/2, i, f"{val}", va='center', ha='center', color='white', fontsize=7, fontweight='bold')
+                            left_accum[i] += val
                 # 在各客運商長條圖末端顯示當月總件數
                 for i, op in enumerate(operators):
                     total_val = vendor_totals[op]
@@ -1015,7 +1019,12 @@ class ExportService:
                 vendor = r.get('vendor_name') or '未知客運'
                 car = r.get('car_number') or ''
                 mileage = r.get('mileage')
-                mileage_str = f"{int(mileage)}" if mileage is not None else ""
+                mileage_str = ""
+                if mileage is not None and str(mileage).strip() != "":
+                    try:
+                        mileage_str = f"{int(float(mileage))}"
+                    except ValueError:
+                        mileage_str = str(mileage)
                 desc = r.get('description') or ''
                 sol = r.get('solution') or ''
                 

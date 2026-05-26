@@ -9,10 +9,10 @@ from export_service import ExportService
 # Mock data
 reports = [
     # Some completed in 2026-05
-    {"completed_at": "2026-05-10T12:00:00", "vendor_name": "高雄客運", "component": "冷氣", "solution_type": "維修", "car_number": "EAA-779", "description": "冷氣冷媒不足且管線出風不冷"},
-    {"completed_at": "2026-05-11T12:00:00", "vendor_name": "高雄客運", "component": "冷氣", "solution_type": "維修", "car_number": "EAA-779", "description": "冷氣出風不冷"},
-    {"completed_at": "2026-05-12T12:00:00", "vendor_name": "高雄客運", "component": "TMS", "solution_type": "更換", "car_number": "EAA-780", "description": "TMS訊號模組無法連線"},
-    {"completed_at": "2026-05-12T13:00:00", "vendor_name": "港都客運", "component": "BMS", "solution_type": "售服", "car_number": "EAA-801", "description": "BMS電池組單體電壓不平衡"},
+    {"completed_at": "2026-05-10T12:00:00", "vendor_name": "高雄客運", "component": "冷氣", "solution_type": "維修", "car_number": "EAA-779", "description": "冷氣冷媒不足且管線出風不冷", "mileage": ""},
+    {"completed_at": "2026-05-11T12:00:00", "vendor_name": "高雄客運", "component": "冷氣", "solution_type": "維修", "car_number": "EAA-779", "description": "冷氣出風不冷", "mileage": None},
+    {"completed_at": "2026-05-12T12:00:00", "vendor_name": "高雄客運", "component": "TMS", "solution_type": "更換", "car_number": "EAA-780", "description": "TMS訊號模組無法連線", "mileage": 12500.5},
+    {"completed_at": "2026-05-12T13:00:00", "vendor_name": "港都客運", "component": "BMS", "solution_type": "售服", "car_number": "EAA-801", "description": "BMS電池組單體電壓不平衡", "mileage": "45200"},
     {"completed_at": "2026-05-13T12:00:00", "vendor_name": "港都客運", "component": "BMS", "solution_type": "售服", "car_number": "EAA-801", "description": "BMS電池組單體電壓不平衡"},
     
     # Design modifications this month (qualifying count >= 5)

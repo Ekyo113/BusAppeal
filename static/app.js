@@ -56,6 +56,7 @@ async function loadReports() {
         
         renderReports();
         updateStats();
+        populateDesignSelects();
     } catch (error) {
         console.error(error);
         alert("連線失敗，請檢查網路狀態。");
@@ -1555,26 +1556,8 @@ function loadExportTab() {
         }
     }
 
-    // Populate design solutions checkboxes
-    const checkboxContainer = document.getElementById('export-design-checkboxes');
-    if (checkboxContainer) {
-        const designSols = [...new Set(
-            allReports
-                .filter(r => r.status === '已完成' && r.solution_type === '設計修改')
-                .map(r => (r.solution || '').trim())
-                .filter(Boolean)
-        )].sort();
-
-        if (designSols.length === 0) {
-            checkboxContainer.innerHTML = '<span style="color: var(--text-muted); font-size: 0.85rem;">暫無已完成的設計修改方案</span>';
-        } else {
-            checkboxContainer.innerHTML = designSols.map(sol => `
-                <label style="display: inline-flex; align-items: center; gap: 0.3rem; cursor: pointer; color: white; font-size: 0.85rem; user-select: none;">
-                    <input type="checkbox" value="${sol}" class="design-sol-checkbox"> ${sol}
-                </label>
-            `).join('');
-        }
-    }
+    // Populate design solutions selects
+    populateDesignSelects();
 
     if (!exportInitialized) {
         resetExportSelection();
@@ -1582,6 +1565,32 @@ function loadExportTab() {
     }
     
     renderExportTable();
+}
+
+function populateDesignSelects() {
+    const select1 = document.getElementById('export-design-select-1');
+    const select2 = document.getElementById('export-design-select-2');
+    if (select1 && select2) {
+        const designSols = [...new Set(
+            allReports
+                .filter(r => r.status === '已完成' && r.solution_type === '設計修改')
+                .map(r => (r.solution || '').trim())
+                .filter(Boolean)
+        )].sort();
+
+        const val1 = select1.value;
+        const val2 = select2.value;
+
+        const optionsHtml = '<option value="">未選擇</option>' + designSols.map(sol => `
+            <option value="${sol}">${sol}</option>
+        `).join('');
+
+        select1.innerHTML = optionsHtml;
+        select2.innerHTML = optionsHtml;
+
+        if (val1 && designSols.includes(val1)) select1.value = val1;
+        if (val2 && designSols.includes(val2)) select2.value = val2;
+    }
 }
 
 function onExportFilterChange() {
@@ -2489,12 +2498,16 @@ async function exportMonthlyReportPdf() {
     const month = select.value;
     const token = document.getElementById('admin-token').value;
     
-    // Get checked design solutions
+    // Get selected design solutions from the two dropdowns
     const checkedSols = [];
-    const checkboxes = document.querySelectorAll('#export-design-checkboxes .design-sol-checkbox:checked');
-    checkboxes.forEach(cb => {
-        checkedSols.push(cb.value);
-    });
+    const select1 = document.getElementById('export-design-select-1');
+    const select2 = document.getElementById('export-design-select-2');
+    if (select1 && select1.value) {
+        checkedSols.push(select1.value);
+    }
+    if (select2 && select2.value && select2.value !== (select1 ? select1.value : '')) {
+        checkedSols.push(select2.value);
+    }
     
     showToast("報表繪製與 PDF 下載中，請稍候...", "success");
     

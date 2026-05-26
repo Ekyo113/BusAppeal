@@ -322,10 +322,15 @@
                                     <!-- Populated by JS -->
                                 </select>
                                 
-                                <span style="font-size: 0.9rem; color: white; margin-left: 0.5rem;">額外加入對照表方案：</span>
-                                <div id="export-design-checkboxes" style="display: flex; gap: 0.8rem; align-items: center; flex-wrap: wrap; background: rgba(255,255,255,0.05); padding: 0.4rem 0.8rem; border-radius: 6px; max-height: 120px; overflow-y: auto; border: 1px solid var(--border); min-width: 200px; flex-grow: 1;">
-                                    <span style="color: var(--text-muted); font-size: 0.85rem;">載入中...</span>
-                                </div>
+                                <span style="font-size: 0.9rem; color: white; margin-left: 0.5rem;">額外加入方案一：</span>
+                                <select id="export-design-select-1" style="padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: white; width: 180px; outline: none; cursor: pointer;">
+                                    <option value="">未選擇</option>
+                                </select>
+                                
+                                <span style="font-size: 0.9rem; color: white; margin-left: 0.5rem;">額外加入方案二：</span>
+                                <select id="export-design-select-2" style="padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: white; width: 180px; outline: none; cursor: pointer;">
+                                    <option value="">未選擇</option>
+                                </select>
                                 
                                 <button class="btn-primary" onclick="exportMonthlyReportPdf()">📄 匯出維修月報 PDF</button>
                             </div>
