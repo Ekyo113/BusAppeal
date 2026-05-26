@@ -16,7 +16,25 @@ from fastapi.responses import StreamingResponse
 from export_service import ExportService
 import bus_service
 from pydantic import BaseModel
+from typing import Optional
+import secrets
 
+class ReportUpdateInput(BaseModel):
+    car_number: Optional[str] = None
+    description: Optional[str] = None
+    solution_type: Optional[str] = None
+    handler_name: Optional[str] = None
+    solution: Optional[str] = None
+    mileage: Optional[str] = None
+    status: Optional[str] = None
+    created_at: Optional[str] = None
+    completed_at: Optional[str] = None
+    reply: Optional[str] = None
+    component: Optional[str] = None
+
+class SolutionUpdateInput(BaseModel):
+    solution: Optional[str] = None
+    mileage: Optional[str] = None
 
 router = APIRouter(prefix="/admin")
 
@@ -47,7 +65,7 @@ async def get_weekly_gps_log(date: str = None, token: str = Header(None)):
     return response.data
 
 def verify_token(token: str):
-    if not Config.ADMIN_SECRET_KEY or token != Config.ADMIN_SECRET_KEY:
+    if not Config.ADMIN_SECRET_KEY or not secrets.compare_digest(token or "", Config.ADMIN_SECRET_KEY):
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 @router.get("/reports")
@@ -57,8 +75,9 @@ async def get_reports(token: str = Header(None)):
     return response.data
 
 @router.patch("/reports/{report_id}")
-async def update_report(report_id: str, data: dict = Body(...), token: str = Header(None)):
+async def update_report(report_id: str, payload: ReportUpdateInput, token: str = Header(None)):
     verify_token(token)
+    data = payload.model_dump(exclude_unset=True) if hasattr(payload, "model_dump") else payload.dict(exclude_unset=True)
     status = data.get("status")
     mileage = data.get("mileage")
     
@@ -84,8 +103,9 @@ async def delete_report(report_id: str, token: str = Header(None)):
     return {"status": "success"}
 
 @router.patch("/reports/{report_id}/solution")
-async def update_solution(report_id: str, data: dict = Body(...), token: str = Header(None)):
+async def update_solution(report_id: str, payload: SolutionUpdateInput, token: str = Header(None)):
     verify_token(token)
+    data = payload.model_dump(exclude_unset=True) if hasattr(payload, "model_dump") else payload.dict(exclude_unset=True)
     solution = data.get("solution")
     mileage = data.get("mileage")
     Database.update_report_solution(report_id, solution, mileage)

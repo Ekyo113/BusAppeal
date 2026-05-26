@@ -121,7 +121,9 @@ async def handle_text_message(event):
 
         elif step == "GET_DESCRIPTION":
             # Step 2: Ask if Media is needed
-            temp_data["description"] = text
+            # Limit description length to 300 characters for safety
+            desc_text = text[:300]
+            temp_data["description"] = desc_text
             Database.update_user_state(user_id, "GET_MEDIA_PROMPT", temp_data)
             
             reply = "收到描述。最後一步：\n\n3. 是否需要上傳「照片或影片」？"
@@ -168,6 +170,8 @@ async def handle_text_message(event):
 
 async def handle_group_message(event, sender_user_id: str, group_id: str, text: str):
     """處理管理群發送的維修結果訊息，自動更新對應通報單。"""
+    # Limit input length to 1000 characters for safety
+    text = text[:1000]
     async with AsyncApiClient(configuration) as api_client:
         line_bot_api = AsyncMessagingApi(api_client)
 
