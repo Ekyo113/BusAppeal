@@ -317,7 +317,7 @@ class ExportService:
                 print(f"Failed to add font to matplotlib: {e}")
 
     @staticmethod
-    def _draw_table_with_pagination(c, font_name, title, headers, col_widths, data_rows, y, width, height, margin_bottom=50, margin_top=40, header_row_height=20):
+    def _draw_table_with_pagination(c, font_name, title, headers, col_widths, data_rows, y, width, height, margin_bottom=50, margin_top=40, header_row_height=20, font_size=9):
         """
         在 canvas 上繪製表格，並具備自動分頁功能。
         每一列資料 data_rows 中的元素 row，其單元格可以是 list of strings (多行)。
@@ -363,7 +363,7 @@ class ExportService:
         # 繪製初始表頭
         y = draw_header(y)
         
-        c.setFont(font_name, 9)
+        c.setFont(font_name, font_size)
         for row in data_rows:
             # 計算此列行高
             num_lines = max(len(cell) for cell in row) if row else 1
@@ -377,7 +377,7 @@ class ExportService:
                 c.drawString(40, y, f"{title} (續)")
                 y -= 25
                 y = draw_header(y)
-                c.setFont(font_name, 9)
+                c.setFont(font_name, font_size)
                 
             # 畫下一列資料
             # 水平分隔線
@@ -416,7 +416,7 @@ class ExportService:
                     cx_date = cx + 8
                     c.setFont(font_name, 8)
                     c.drawCentredString(cx_date, y - row_h + 7, f"({date_part})")
-                    c.setFont(font_name, 9)
+                    c.setFont(font_name, font_size)
                 else:
                     # 繪製多行文字
                     for line_idx, line in enumerate(cell_lines):
@@ -1030,11 +1030,11 @@ class ExportService:
                 
                 row_cells = [
                     [date_str],
-                    wrap_text(vendor, max_len=6),
-                    wrap_text(car, max_len=6),
-                    wrap_text(mileage_str, max_len=5),
-                    wrap_text(desc, max_len=15),
-                    wrap_text(sol, max_len=16)
+                    wrap_text(vendor, max_len=10),
+                    wrap_text(car, max_len=12),
+                    wrap_text(mileage_str, max_len=10),
+                    wrap_text(desc, max_len=18),
+                    wrap_text(sol, max_len=19)
                 ]
                 appendix_rows.append(row_cells)
                 
@@ -1047,7 +1047,8 @@ class ExportService:
                 headers, 
                 col_widths, 
                 appendix_rows, 
-                y, width, height
+                y, width, height,
+                font_size=7.5
             )
             
         c.showPage()
