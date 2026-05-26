@@ -136,7 +136,7 @@ function renderReports() {
             return pA - pB;
         }
         
-        // Secondary: 車號 / 問題描述 / 建立時間
+        // Secondary: 車號 / 問題描述 / 部件 / 類型 / 建立時間
         if (sortBy === 'car_number') {
             const carA = (a.car_number || '').trim();
             const carB = (b.car_number || '').trim();
@@ -145,6 +145,14 @@ function renderReports() {
             const descA = (a.description || '').trim();
             const descB = (b.description || '').trim();
             return descA.localeCompare(descB, 'zh-TW');
+        } else if (sortBy === 'component') {
+            const compA = (a.component || '').trim();
+            const compB = (b.component || '').trim();
+            return compA.localeCompare(compB, 'zh-TW');
+        } else if (sortBy === 'solution_type') {
+            const typeA = (a.solution_type || '').trim();
+            const typeB = (b.solution_type || '').trim();
+            return typeA.localeCompare(typeB, 'zh-TW');
         } else {
             // Newest first
             return new Date(b.created_at) - new Date(a.created_at);

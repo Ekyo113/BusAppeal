@@ -317,9 +317,10 @@ class ExportService:
                 print(f"Failed to add font to matplotlib: {e}")
 
     @staticmethod
-    def _draw_table_with_pagination(c, font_name, title, headers, col_widths, data_rows, y, width, height, margin_bottom=50, margin_top=40, row_height=20):
+    def _draw_table_with_pagination(c, font_name, title, headers, col_widths, data_rows, y, width, height, margin_bottom=50, margin_top=40, header_row_height=20):
         """
         在 canvas 上繪製表格，並具備自動分頁功能。
+        每一列資料 data_rows 中的元素 row，其單元格可以是 list of strings (多行)。
         """
         start_x = (width - sum(col_widths)) / 2  # 置中
         
@@ -337,34 +338,38 @@ class ExportService:
         # 繪製表頭的輔助函數
         def draw_header(curr_y):
             c.setFillColorRGB(0.92, 0.94, 0.98) # 淺藍色背景
-            c.rect(start_x, curr_y - row_height, sum(col_widths), row_height, fill=True, stroke=False)
+            c.rect(start_x, curr_y - header_row_height, sum(col_widths), header_row_height, fill=True, stroke=False)
             c.setFillColorRGB(0, 0, 0)
             c.setStrokeColorRGB(0.7, 0.7, 0.7)
             c.setLineWidth(0.5)
             
             # 水平線
             c.line(start_x, curr_y, start_x + sum(col_widths), curr_y)
-            c.line(start_x, curr_y - row_height, start_x + sum(col_widths), curr_y - row_height)
+            c.line(start_x, curr_y - header_row_height, start_x + sum(col_widths), curr_y - header_row_height)
             
             # 兩側垂直線
-            c.line(start_x, curr_y, start_x, curr_y - row_height)
-            c.line(start_x + sum(col_widths), curr_y, start_x + sum(col_widths), curr_y - row_height)
+            c.line(start_x, curr_y, start_x, curr_y - header_row_height)
+            c.line(start_x + sum(col_widths), curr_y, start_x + sum(col_widths), curr_y - header_row_height)
             
             c.setFont(font_name, 10)
             curr_x = start_x
             for idx, h in enumerate(headers):
-                c.drawCentredString(curr_x + col_widths[idx]/2, curr_y - row_height + 6, h)
+                c.drawCentredString(curr_x + col_widths[idx]/2, curr_y - header_row_height + 6, h)
                 curr_x += col_widths[idx]
                 if idx < len(headers) - 1:
-                    c.line(curr_x, curr_y, curr_x, curr_y - row_height)
-            return curr_y - row_height
+                    c.line(curr_x, curr_y, curr_x, curr_y - header_row_height)
+            return curr_y - header_row_height
             
         # 繪製初始表頭
         y = draw_header(y)
         
         c.setFont(font_name, 9)
         for row in data_rows:
-            if y < margin_bottom + row_height:
+            # 計算此列行高
+            num_lines = max(len(cell) for cell in row) if row else 1
+            row_h = 10 + num_lines * 10
+            
+            if y < margin_bottom + row_h:
                 # 換頁
                 c.showPage()
                 y = height - margin_top
@@ -376,32 +381,56 @@ class ExportService:
                 
             # 畫下一列資料
             # 水平分隔線
-            c.line(start_x, y - row_height, start_x + sum(col_widths), y - row_height)
+            c.line(start_x, y - row_h, start_x + sum(col_widths), y - row_h)
             
             curr_x = start_x
-            for idx, val in enumerate(row):
-                val_str = str(val or '')
-                if val_str == '✓':
-                    # Draw a custom checkmark using vector lines to ensure rendering
+            for idx, cell_lines in enumerate(row):
+                # 檢查單元格是否為打勾或複合打勾
+                if len(cell_lines) == 1 and cell_lines[0] == '✓':
                     cx = curr_x + col_widths[idx]/2
-                    cy = y - row_height/2
+                    cy = y - row_h/2
                     c.saveState()
                     c.setLineWidth(1.5)
                     c.setStrokeColorRGB(0.1, 0.6, 0.1) # Greenish color
                     c.line(cx - 4, cy - 1, cx - 1, cy - 4)
                     c.line(cx - 1, cy - 4, cx + 4, cy + 3)
                     c.restoreState()
+                elif len(cell_lines) == 1 and cell_lines[0].startswith('✓ ('):
+                    # 複合打勾格式，例如 "✓ (05-16)"
+                    val_str = cell_lines[0]
+                    date_part = val_str[3:-1] # 提取 "05-16"
+                    
+                    cx = curr_x + col_widths[idx]/2
+                    cy = y - row_h/2
+                    
+                    # 繪製偏左的打勾
+                    cx_chk = cx - 18
+                    c.saveState()
+                    c.setLineWidth(1.2)
+                    c.setStrokeColorRGB(0.1, 0.6, 0.1)
+                    c.line(cx_chk - 3, cy - 1, cx_chk - 1, cy - 3)
+                    c.line(cx_chk - 1, cy - 3, cx_chk + 3, cy + 2)
+                    c.restoreState()
+                    
+                    # 繪製偏右的日期
+                    cx_date = cx + 8
+                    c.setFont(font_name, 8)
+                    c.drawCentredString(cx_date, y - row_h + 7, f"({date_part})")
+                    c.setFont(font_name, 9)
                 else:
-                    c.drawCentredString(curr_x + col_widths[idx]/2, y - row_height + 6, val_str)
+                    # 繪製多行文字
+                    for line_idx, line in enumerate(cell_lines):
+                        c.drawCentredString(curr_x + col_widths[idx]/2, y - 14 - line_idx * 10, line)
+                
                 curr_x += col_widths[idx]
                 if idx < len(headers) - 1:
-                    c.line(curr_x, y, curr_x, y - row_height)
+                    c.line(curr_x, y, curr_x, y - row_h)
                     
             # 兩側垂直線
-            c.line(start_x, y, start_x, y - row_height)
-            c.line(start_x + sum(col_widths), y, start_x + sum(col_widths), y - row_height)
+            c.line(start_x, y, start_x, y - row_h)
+            c.line(start_x + sum(col_widths), y, start_x + sum(col_widths), y - row_h)
             
-            y -= row_height
+            y -= row_h
             
         return y
 
@@ -766,6 +795,35 @@ class ExportService:
         c.showPage() # Commits Page 3. Now we are on Page 4.
 
         # ----------------------------------------------------
+        # 輔助函式：文字折行與車號折行
+        # ----------------------------------------------------
+        def wrap_text(text, max_len=24):
+            if not text:
+                return [""]
+            lines = []
+            for i in range(0, len(text), max_len):
+                lines.append(text[i:i+max_len])
+            return lines
+            
+        def wrap_vehicles(cars_str, max_len=18):
+            if not cars_str:
+                return [""]
+            parts = cars_str.split(", ")
+            lines = []
+            current_line = ""
+            for part in parts:
+                if not current_line:
+                    current_line = part
+                elif len(current_line) + len(part) + 2 <= max_len:
+                    current_line += ", " + part
+                else:
+                    lines.append(current_line)
+                    current_line = part
+            if current_line:
+                lines.append(current_line)
+            return lines
+
+        # ----------------------------------------------------
         # 三、 客運與品情對照分析
         # ----------------------------------------------------
         # 1. 統計客運商通報總數量以便排序
@@ -790,8 +848,7 @@ class ExportService:
             vendor = r.get('vendor_name') or '未知客運'
             car = (r.get('car_number') or '').strip().upper() or '未知車號'
             desc = (r.get('description') or '').strip() or '無描述'
-            desc_truncated = desc[:24] + '...' if len(desc) > 25 else desc
-            r1_rows.append([vendor, car, desc_truncated])
+            r1_rows.append([[vendor], [car], wrap_text(desc, max_len=24)])
         
         y = height - 40
         c.setFont(font_name, 16)
@@ -828,9 +885,11 @@ class ExportService:
         for desc, cars in sorted_desc:
             unique_cars = sorted(list(set(cars)))
             cars_str = ", ".join(unique_cars)
-            desc_truncated = desc[:24] + '...' if len(desc) > 25 else desc
-            cars_truncated = cars_str[:20] + '...' if len(cars_str) > 21 else cars_str
-            r2_rows.append([desc_truncated, cars_truncated, f"{len(cars)} 件"])
+            r2_rows.append([
+                wrap_text(desc, max_len=22), 
+                wrap_vehicles(cars_str, max_len=18), 
+                [f"{len(cars)} 件"]
+            ])
         
         if y < 150:
             c.showPage()
@@ -874,44 +933,51 @@ class ExportService:
             buses = monitored_buses or []
             sorted_buses = sorted(buses, key=lambda b: (b.get('vendor_name') or '', b.get('plate_number') or ''))
             
+            # 建立多個方案的歷史完成記錄字典 (方案名稱 -> 車號 -> 最早完成日期)
+            sols_history = {}
             for sol_text in qualifying_sols:
-                matching_history = {}
+                sols_history[sol_text] = {}
                 for hr in history_reports:
                     hist_sol = (hr.get('solution') or '').strip()
                     if hist_sol == sol_text:
                         car = (hr.get('car_number') or '').strip().upper()
                         if car:
                             comp_at = hr.get('completed_at') or ''
-                            if car not in matching_history or (comp_at and comp_at < matching_history[car]):
-                                matching_history[car] = comp_at
+                            if car not in sols_history[sol_text] or (comp_at and comp_at < sols_history[sol_text][car]):
+                                sols_history[sol_text][car] = comp_at
                                 
-                r3_rows = []
-                for bus in sorted_buses:
-                    vendor = bus.get('vendor_name') or '未知客運'
-                    plate = (bus.get('plate_number') or '').strip().upper()
-                    
-                    date_str = '-'
-                    status_str = ''
-                    if plate in matching_history:
-                        comp_at = matching_history[plate]
-                        if comp_at and len(comp_at) >= 10:
-                            date_str = comp_at[5:10] # MM-DD
-                        elif comp_at:
-                            date_str = comp_at
-                        status_str = '✓'
-                        
-                    r3_rows.append([vendor, plate, date_str, status_str])
+            # 動態分配欄位寬度 (業者 100, 車號 70, 剩餘 310 分給各方案)
+            num_sols = len(qualifying_sols)
+            sol_col_width = 310 / num_sols
+            col_widths = [100, 70] + [sol_col_width] * num_sols
+            
+            headers = ["業者", "車號"] + [sol[:10] + '...' if len(sol) > 11 else sol for sol in qualifying_sols]
+            
+            r3_rows = []
+            for bus in sorted_buses:
+                vendor = bus.get('vendor_name') or '未知客運'
+                plate = (bus.get('plate_number') or '').strip().upper()
                 
-                y = ExportService._draw_table_with_pagination(
-                    c, font_name, 
-                    f"設計修改累計對照表 — {sol_text[:35]}", 
-                    ["業者", "車號", "完成日期 (MM-DD)", "是否完成"], 
-                    [150, 110, 110, 110], 
-                    r3_rows, 
-                    y, width, height
-                )
-                y -= 40
+                row_cells = [[vendor], [plate]]
+                for sol_text in qualifying_sols:
+                    if plate in sols_history[sol_text]:
+                        comp_at = sols_history[sol_text][plate]
+                        date_str = comp_at[5:10] if (comp_at and len(comp_at) >= 10) else (comp_at or '')
+                        cell_val = f"✓ ({date_str})" if date_str else "✓"
+                    else:
+                        cell_val = "-"
+                    row_cells.append([cell_val])
+                r3_rows.append(row_cells)
                 
+            y = ExportService._draw_table_with_pagination(
+                c, font_name, 
+                "設計修改累計對照表", 
+                headers, 
+                col_widths, 
+                r3_rows, 
+                y, width, height
+            )
+            
         c.showPage()
         c.save()
         buffer.seek(0)
