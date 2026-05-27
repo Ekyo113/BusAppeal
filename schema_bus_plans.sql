@@ -41,5 +41,7 @@ BEGIN
     SELECT DISTINCT weekly_bus_gps_log.plate_number, DATE(weekly_bus_gps_log.recorded_at)
     FROM weekly_bus_gps_log;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp;
 
