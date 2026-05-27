@@ -44,7 +44,8 @@ BEGIN
     FROM weekly_bus_gps_log;
 END;
 $$ LANGUAGE plpgsql
-SECURITY INVOKER;
+SECURITY INVOKER
+SET search_path = public, pg_temp;
 
 -- 限制執行權限以策安全 (防止匿名或一般登入帳戶透過 API 呼叫)
 REVOKE EXECUTE ON FUNCTION get_unique_bus_gps_pairs() FROM PUBLIC;
