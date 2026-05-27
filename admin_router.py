@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Header, HTTPException, Body
+from fastapi import APIRouter, Header, HTTPException, Body, BackgroundTasks
 import asyncio
 from database import Database
 from config import Config
@@ -219,18 +219,24 @@ async def get_monitored_buses(token: str = Header(None)):
     buses = Database.get_bus_vendors()
     return buses
 
+def run_sync_schedules_bg(city: str):
+    global is_syncing
+    try:
+        bus_service.sync_route_schedules(city)
+    except Exception as e:
+        print(f"[sync_schedules background] Error: {e}")
+    finally:
+        is_syncing = False
+
 @router.post("/bus_plans/sync_schedules")
-async def sync_schedules(city: str = "Kaohsiung", token: str = Header(None)):
+async def sync_schedules(background_tasks: BackgroundTasks, city: str = "Kaohsiung", token: str = Header(None)):
     global is_syncing
     verify_token(token)
     if is_syncing:
         raise HTTPException(status_code=429, detail="同步時刻表任務正在進行中，請稍後再試。")
     is_syncing = True
-    try:
-        count = bus_service.sync_route_schedules(city)
-        return {"status": "success", "count": count}
-    finally:
-        is_syncing = False
+    background_tasks.add_task(run_sync_schedules_bg, city)
+    return {"status": "success", "message": f"{city} 同步時刻表任務已於背景啟動。"}
 
 @router.post("/bus_plans/analyze_selected")
 async def analyze_selected_vehicle(plate_number: str = Body(..., embed=True), token: str = Header(None)):
@@ -288,14 +294,12 @@ async def analyze_all_logs(token: str = Header(None)):
         for row in existing_plans_res.data:
             existing_pairs.add((row["plate_number"], row["date"]))
 
-        # 2. 找出所有有 GPS 紀錄的車號與日期 (僅抓取最近 30 天，且只取必要欄位)
-        res = client.table("weekly_bus_gps_log")\
-            .select("plate_number, recorded_at")\
-            .execute()
+        # 2. 找出所有有 GPS 紀錄的車號與日期 (使用 RPC 聚合查詢，避免拉回大量重複記錄)
+        res = client.rpc("get_unique_bus_gps_pairs").execute()
         
         unique_pairs = set()
         for row in res.data:
-            date = row["recorded_at"].split("T")[0]
+            date = row["recorded_date"]
             plate = row["plate_number"]
             
             # [測試模式] 目前僅分析 EAA-779

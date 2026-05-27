@@ -22,9 +22,17 @@ async function loadReports() {
     `;
 
     try {
-        const response = await fetch('/admin/reports', {
+        const reportsPromise = fetch('/admin/reports', {
             headers: { 'token': token }
         });
+        const busesPromise = fetch('/admin/monitored_buses', {
+            headers: { 'token': token }
+        }).catch(e => {
+            console.error("Failed to load monitored buses at startup:", e);
+            return null;
+        });
+
+        const [response, busesRes] = await Promise.all([reportsPromise, busesPromise]);
 
         if (response.status === 401) {
             alert("金鑰錯誤，請重新輸入。");
@@ -35,16 +43,8 @@ async function loadReports() {
 
         allReports = await response.json();
         
-        // Also fetch monitored buses
-        try {
-            const busesRes = await fetch('/admin/monitored_buses', {
-                headers: { 'token': token }
-            });
-            if (busesRes.ok) {
-                monitoredBuses = await busesRes.json();
-            }
-        } catch (e) {
-            console.error("Failed to load monitored buses at startup:", e);
+        if (busesRes && busesRes.ok) {
+            monitoredBuses = await busesRes.json();
         }
 
         // Restore type filter checkbox states from localStorage

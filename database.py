@@ -259,14 +259,13 @@ class Database:
             
             # 關聯客運公司 (使用 monitored_buses 表)
             vendors = cls.get_bus_vendors()
+            vendor_map = {
+                (v.get('plate_number') or '').strip().upper(): v.get('vendor_name', '未知客運')
+                for v in vendors if v.get('plate_number')
+            }
             for r in reports:
-                r['vendor_name'] = '未知客運'
                 car = (r.get('car_number', '') or '').strip().upper()
-                for v in vendors:
-                    plate = (v.get('plate_number', '') or '').strip().upper()
-                    if plate and plate == car:
-                        r['vendor_name'] = v.get('vendor_name', '未知客運')
-                        break
+                r['vendor_name'] = vendor_map.get(car, '未知客運')
             
             return reports
         except Exception as e:
@@ -285,14 +284,13 @@ class Database:
             
             # 關聯客運公司 (使用 monitored_buses 表)
             vendors = cls.get_bus_vendors()
+            vendor_map = {
+                (v.get('plate_number') or '').strip().upper(): v.get('vendor_name', '未知客運')
+                for v in vendors if v.get('plate_number')
+            }
             for r in reports:
-                r['vendor_name'] = '未知客運'
                 car = (r.get('car_number', '') or '').strip().upper()
-                for v in vendors:
-                    plate = (v.get('plate_number', '') or '').strip().upper()
-                    if plate and plate == car:
-                        r['vendor_name'] = v.get('vendor_name', '未知客運')
-                        break
+                r['vendor_name'] = vendor_map.get(car, '未知客運')
             
             return reports
         except Exception as e:
@@ -315,14 +313,13 @@ class Database:
             sorted_reports = [reports_map[rid] for rid in ids if rid in reports_map]
             
             vendors = cls.get_bus_vendors()
+            vendor_map = {
+                (v.get('plate_number') or '').strip().upper(): v.get('vendor_name', '未知客運')
+                for v in vendors if v.get('plate_number')
+            }
             for r in sorted_reports:
-                r['vendor_name'] = '未知客運'
                 car = (r.get('car_number', '') or '').strip().upper()
-                for v in vendors:
-                    plate = (v.get('plate_number', '') or '').strip().upper()
-                    if plate and plate == car:
-                        r['vendor_name'] = v.get('vendor_name', '未知客運')
-                        break
+                r['vendor_name'] = vendor_map.get(car, '未知客運')
             return sorted_reports
         except Exception as e:
             print(f"DB Error get_reports_by_ids: {e}")

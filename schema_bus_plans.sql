@@ -25,3 +25,21 @@ CREATE TABLE IF NOT EXISTS bus_operating_plans (
 -- Add index for performance
 CREATE INDEX IF NOT EXISTS idx_bus_plans_lookup ON bus_operating_plans (plate_number, date);
 CREATE INDEX IF NOT EXISTS idx_bus_schedules_lookup ON bus_route_schedules (city_code, route_name);
+
+-- 建立 reports 表索引以加速列表撈取
+CREATE INDEX IF NOT EXISTS idx_reports_created_at ON reports (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_reports_status ON reports (status);
+
+-- 建立 weekly_bus_gps_log 複合索引
+CREATE INDEX IF NOT EXISTS idx_weekly_gps_log_plate_time ON weekly_bus_gps_log (plate_number, recorded_at);
+
+-- 建立不重複車牌與日期的預存程序
+CREATE OR REPLACE FUNCTION get_unique_bus_gps_pairs()
+RETURNS TABLE(plate_number TEXT, recorded_date DATE) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT DISTINCT weekly_bus_gps_log.plate_number, DATE(weekly_bus_gps_log.recorded_at)
+    FROM weekly_bus_gps_log;
+END;
+$$ LANGUAGE plpgsql;
+
