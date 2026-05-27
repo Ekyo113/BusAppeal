@@ -35,10 +35,10 @@ CREATE INDEX IF NOT EXISTS idx_weekly_gps_log_plate_time ON weekly_bus_gps_log (
 
 -- 建立不重複車牌與日期的預存程序
 CREATE OR REPLACE FUNCTION get_unique_bus_gps_pairs()
-RETURNS TABLE(plate_number TEXT, recorded_date DATE) AS $$
+RETURNS TABLE(plate_number TEXT, recorded_date TEXT) AS $$
 BEGIN
     RETURN QUERY
-    SELECT DISTINCT weekly_bus_gps_log.plate_number, DATE(weekly_bus_gps_log.recorded_at)
+    SELECT DISTINCT weekly_bus_gps_log.plate_number, split_part(weekly_bus_gps_log.recorded_at, 'T', 1)
     FROM weekly_bus_gps_log;
 END;
 $$ LANGUAGE plpgsql
