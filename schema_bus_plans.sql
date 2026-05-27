@@ -34,6 +34,8 @@ CREATE INDEX IF NOT EXISTS idx_reports_status ON reports (status);
 CREATE INDEX IF NOT EXISTS idx_weekly_gps_log_plate_time ON weekly_bus_gps_log (plate_number, recorded_at);
 
 -- 建立不重複車牌與日期的預存程序
+DROP FUNCTION IF EXISTS get_unique_bus_gps_pairs();
+
 CREATE OR REPLACE FUNCTION get_unique_bus_gps_pairs()
 RETURNS TABLE(plate_number TEXT, recorded_date TEXT) AS $$
 BEGIN
