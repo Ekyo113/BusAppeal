@@ -36,6 +36,7 @@ class ExportService:
     @staticmethod
     def _draw_report_pdf(c, reports, font, width, height, content_field: str = "solution"):
         """通報紀錄：一頁一筆"""
+        c._code.append("0.5 Tc") # Widen character spacing for numbers/text
         for r in reports:
             # 標題
             c.setFont(font, 18)
@@ -99,10 +100,13 @@ class ExportService:
             c.drawString(2*cm, y - 0.5*cm, "( 以下為預留空白處，供新增資訊 or 核章使用 )")
             
             c.showPage() # 換頁
+            c._code.append("0.5 Tc")
+        c._code.append("0 Tc") # Restore default character space
 
     @staticmethod
     def _draw_replacement_pdf(c, reports, font, width, height, content_field: str = "solution"):
         """換件紀錄：清單式"""
+        c._code.append("0.5 Tc") # Widen character spacing for numbers/text
         c.setFont(font, 18)
         c.drawCentredString(width/2, height - 2*cm, f"公車零件更換紀錄表")
         
@@ -126,6 +130,7 @@ class ExportService:
         for r in reports:
             if y < 2*cm: # 換頁檢查
                 c.showPage()
+                c._code.append("0.5 Tc")
                 y = height - 2*cm
                 c.setFont(font, 10)
             
@@ -152,6 +157,7 @@ class ExportService:
             c.setDash(1, 1)
             c.line(1*cm, y + 0.2*cm, width - 1*cm, y + 0.2*cm)
             c.setDash(1, 0) # 恢復實線
+        c._code.append("0 Tc") # Restore default character space
 
     @staticmethod
     def _wrap_text(text, limit):
@@ -322,6 +328,7 @@ class ExportService:
         在 canvas 上繪製表格，並具備自動分頁功能。
         每一列資料 data_rows 中的元素 row，其單元格可以是 list of strings (多行)。
         """
+        c._code.append("0.5 Tc") # Widen character spacing for numbers/text
         start_x = (width - sum(col_widths)) / 2  # 置中
         
         # Determine max lines in headers to adjust header row height dynamically
@@ -342,6 +349,7 @@ class ExportService:
         
         if y < margin_bottom + 45:
             c.showPage()
+            c._code.append("0.5 Tc")
             y = height - margin_top
             
         c.drawString(40, y, title)
@@ -391,6 +399,7 @@ class ExportService:
             if y < margin_bottom + row_h:
                 # 換頁
                 c.showPage()
+                c._code.append("0.5 Tc")
                 y = height - margin_top
                 c.setFont(font_name, 11)
                 c.drawString(40, y, f"{title} (續)")
@@ -451,6 +460,7 @@ class ExportService:
             
             y -= row_h
             
+        c._code.append("0 Tc") # Restore default character space
         return y
 
     @staticmethod
@@ -476,6 +486,7 @@ class ExportService:
         c = canvas.Canvas(buffer, pagesize=A4)
         width, height = A4
         font_name = ExportService.setup_font()
+        c._code.append("0.5 Tc") # Widen character spacing for numbers/text
         
         # Parse month number
         try:
@@ -651,6 +662,7 @@ class ExportService:
                 # Check for overflow
                 if pending_y < 50 + row_h:
                     c.showPage()
+                    c._code.append("0.5 Tc")
                     c.setFont(font_name, 11)
                     c.drawString(40, height - 40, "待處理清單 (續)")
                     pending_y = height - 60
@@ -708,6 +720,7 @@ class ExportService:
             c.drawCentredString(width/2, pending_y - 15, "目前無待處理案件")
 
         c.showPage()
+        c._code.append("0.5 Tc")
         
         # 2. Setup Matplotlib Font
         ExportService.setup_matplotlib_font()
@@ -842,6 +855,7 @@ class ExportService:
         c.line(start_x + 480, table_y, start_x + 480, 420 + row_height)
         
         c.showPage()
+        c._code.append("0.5 Tc")
         
         # 4. Page 2: Operator & Component breakdown
         month_reports = [r for r in reports if r.get('completed_at', '').startswith(month)]
@@ -964,6 +978,7 @@ class ExportService:
         c.drawImage(ImageReader(row3_img_buf), 30, 30, width=535, height=230)
         
         c.showPage() # Commits Page 3. Now we are on Page 4.
+        c._code.append("0.5 Tc")
 
         # ----------------------------------------------------
         # 輔助函式：文字折行與車號折行
@@ -1073,6 +1088,7 @@ class ExportService:
         
         if y < 150:
             c.showPage()
+            c._code.append("0.5 Tc")
             y = height - 40
         else:
             y -= 40
@@ -1111,6 +1127,7 @@ class ExportService:
         
         if qualifying_sols:
             c.showPage()
+            c._code.append("0.5 Tc")
             y = height - 40
             c.setFont(font_name, 16)
             c.drawString(40, y, "五、 設計修改累計完成對照")
@@ -1183,6 +1200,7 @@ class ExportService:
         
         if appendix_reports:
             c.showPage()
+            c._code.append("0.5 Tc")
             y = height - 40
             c.setFont(font_name, 16)
             c.drawString(40, y, "附錄、 當月新增項目明細")
@@ -1229,6 +1247,7 @@ class ExportService:
             )
             
         c.showPage()
+        c._code.append("0 Tc") # Reset before ending
         c.save()
         buffer.seek(0)
         return buffer
