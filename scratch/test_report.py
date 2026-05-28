@@ -62,27 +62,58 @@ monitored_buses = [
 ]
 
 try:
-    print("Generating monthly PDF report...")
+    print("Generating monthly PDF reports...")
     selected_design_sols = ["加強型冷氣支架", "超薄型前擋泥板防噴優化方案"]
     
     # 增加測試資料：額外選取的方案的歷史完成記錄，驗證是否顯示打勾與日期
     all_time_design_reports.append({"completed_at": "2026-05-20T12:00:00", "car_number": "EAA-901", "solution_type": "設計修改", "solution": "超薄型前擋泥板防噴優化方案"})
     all_time_design_reports.append({"completed_at": "2026-05-22T12:00:00", "car_number": "EAA-905", "solution_type": "設計修改", "solution": "超薄型前擋泥板防噴優化方案"})
 
+    # 1. Test case: Standard pending reports (should fit on Cover page)
+    mock_pending_reports = [
+        {"car_number": "EAA-779", "description": "冷氣出風口有異音", "created_at": "2026-05-20T10:00:00Z"},
+        {"car_number": "EAA-780", "description": "煞車系統警示燈亮起，需做詳細檢查", "created_at": "2026-05-18T08:30:00+00:00"},
+        {"car_number": "EAA-801", "description": "車門防夾感應器失效", "created_at": "2026-05-22T14:15:00"},
+        {"car_number": "EAA-802", "description": "GPS天線收訊不良，經常斷訊", "created_at": "2026-05-19T11:45:00"},
+    ]
+
+    print("Generating standard report...")
     pdf_buffer = ExportService.generate_monthly_report_pdf(
         reports, "2026-05", "2026-01-01", "2026-05-31",
         all_time_design_reports=all_time_design_reports,
         monitored_buses=monitored_buses,
-        selected_design_sols=selected_design_sols
+        selected_design_sols=selected_design_sols,
+        pending_reports=mock_pending_reports
     )
-    
-    # Save buffer to a local file
     output_path = os.path.join(os.path.dirname(__file__), "test_monthly_report.pdf")
     with open(output_path, "wb") as f:
         f.write(pdf_buffer.read())
-        
     print(f"Successfully generated PDF: {output_path}")
     print(f"File size: {os.path.getsize(output_path)} bytes")
+
+    # 2. Test case: Overflowing pending reports (should trigger auto-pagination)
+    print("Generating overflowing report...")
+    mock_pending_reports_overflow = []
+    for i in range(15):
+        mock_pending_reports_overflow.append({
+            "car_number": f"EAA-90{i%9}",
+            "description": f"這是第 {i+1} 筆待處理的測試案件，描述內容需要夠長以驗證自動折行與自動分頁功能是否能正常運作。",
+            "created_at": f"2026-05-10T{i:02d}:00:00Z"
+        })
+
+    pdf_buffer_overflow = ExportService.generate_monthly_report_pdf(
+        reports, "2026-05", "2026-01-01", "2026-05-31",
+        all_time_design_reports=all_time_design_reports,
+        monitored_buses=monitored_buses,
+        selected_design_sols=selected_design_sols,
+        pending_reports=mock_pending_reports_overflow
+    )
+    output_path_overflow = os.path.join(os.path.dirname(__file__), "test_monthly_report_overflow.pdf")
+    with open(output_path_overflow, "wb") as f:
+        f.write(pdf_buffer_overflow.read())
+    print(f"Successfully generated PDF: {output_path_overflow}")
+    print(f"File size: {os.path.getsize(output_path_overflow)} bytes")
+
 except Exception as e:
     import traceback
     traceback.print_exc()

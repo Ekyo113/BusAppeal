@@ -381,6 +381,9 @@ async def get_monthly_report(month: str = None, design_sols: str = None, token: 
     # 獲取已完成的通報
     reports = Database.get_reports_for_export(start_date, end_date, "all")
     
+    # 獲取所有未完成通報 (待處理)
+    pending_reports = Database.get_all_pending_reports()
+    
     # 獲取歷史設計修改資料與所有受監控公車
     all_time_design_reports = Database.get_all_completed_design_reports()
     monitored_buses = Database.get_bus_vendors()
@@ -390,7 +393,8 @@ async def get_monthly_report(month: str = None, design_sols: str = None, token: 
         reports, month, start_date, end_date,
         all_time_design_reports=all_time_design_reports,
         monitored_buses=monitored_buses,
-        selected_design_sols=selected_design_sols
+        selected_design_sols=selected_design_sols,
+        pending_reports=pending_reports
     )
     
     filename = f"市場組維修報表_{month}.pdf"

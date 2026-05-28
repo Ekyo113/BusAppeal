@@ -454,7 +454,7 @@ class ExportService:
         return y
 
     @staticmethod
-    def generate_monthly_report_pdf(reports, month: str, start_date: str, end_date: str, all_time_design_reports=None, monitored_buses=None, selected_design_sols=None):
+    def generate_monthly_report_pdf(reports, month: str, start_date: str, end_date: str, all_time_design_reports=None, monitored_buses=None, selected_design_sols=None, pending_reports=None):
         import os
         import io
         from datetime import datetime, timedelta
@@ -463,6 +463,15 @@ class ExportService:
         from reportlab.lib.pagesizes import A4
         from reportlab.lib.utils import ImageReader
         
+        # Helper function for text wrapping defined early so it can be used on cover page
+        def wrap_text(text, max_len=24):
+            if not text:
+                return [""]
+            lines = []
+            for i in range(0, len(text), max_len):
+                lines.append(text[i:i+max_len])
+            return lines
+
         buffer = io.BytesIO()
         c = canvas.Canvas(buffer, pagesize=A4)
         width, height = A4
@@ -504,13 +513,13 @@ class ExportService:
 
         # 1. Page 1: Cover
         c.setFont(font_name, 24)
-        c.drawCentredString(width/2, height/2 + 130, f"({target_month_num}月)市場組維修報表")
+        c.drawCentredString(width/2, height/2 + 280, f"({target_month_num}月)市場組維修報表")
         
         c.setFont(font_name, 12)
-        c.drawCentredString(width/2, height/2 + 80, f"產出日期：{datetime.now().strftime('%Y-%m-%d')}")
+        c.drawCentredString(width/2, height/2 + 230, f"產出日期：{datetime.now().strftime('%Y-%m-%d')}")
         
         # Draw Cover Summary Table
-        cover_y = height/2 + 20
+        cover_y = height/2 + 170
         row_h = 22
         col_w = [180, 150, 150]
         start_x = (width - sum(col_w)) / 2
@@ -559,6 +568,145 @@ class ExportService:
                     c.line(curr_x, cover_y, curr_x, cover_y - row_h)
             cover_y -= row_h
             
+        # Draw Pending Reports Table
+        if pending_reports is None:
+            try:
+                from database import Database
+                pending_reports = Database.get_all_pending_reports()
+            except Exception as e:
+                print(f"Error fetching pending reports: {e}")
+                pending_reports = []
+                
+        # Sort pending_reports by created_at ascending (chronological order)
+        pending_reports = sorted(
+            pending_reports or [],
+            key=lambda x: x.get('created_at') or ''
+        )
+        
+        import pytz
+        def format_report_time(created_at_str):
+            if not created_at_str:
+                return "-"
+            try:
+                t_str = created_at_str
+                if t_str.endswith('Z'):
+                    t_str = t_str[:-1] + '+00:00'
+                dt = datetime.fromisoformat(t_str)
+                if dt.tzinfo is None:
+                    dt = pytz.utc.localize(dt)
+                taipei_tz = pytz.timezone('Asia/Taipei')
+                dt_taipei = dt.astimezone(taipei_tz)
+                return dt_taipei.strftime('%m-%d')
+            except Exception:
+                return created_at_str[5:10]
+
+        # Position for pending list table - leave a larger gap
+        pending_y = cover_y - 90
+        c.setFont(font_name, 14)
+        c.drawString(40, pending_y, "待處理清單")
+        pending_y -= 18
+        
+        if pending_reports:
+            pending_headers = ["車號", "問題描述", "通報時間"]
+            pending_col_widths = [90, 285, 140]
+            pending_start_x = (width - sum(pending_col_widths)) / 2 # 40
+            
+            # Header background
+            c.setFillColorRGB(0.92, 0.94, 0.98)
+            c.rect(pending_start_x, pending_y - 20, sum(pending_col_widths), 20, fill=True, stroke=False)
+            c.setFillColorRGB(0, 0, 0)
+            c.setStrokeColorRGB(0.7, 0.7, 0.7)
+            c.setLineWidth(0.5)
+            
+            # Header borders
+            c.line(pending_start_x, pending_y, pending_start_x + sum(pending_col_widths), pending_y)
+            c.line(pending_start_x, pending_y - 20, pending_start_x + sum(pending_col_widths), pending_y - 20)
+            c.line(pending_start_x, pending_y, pending_start_x, pending_y - 20)
+            c.line(pending_start_x + sum(pending_col_widths), pending_y, pending_start_x + sum(pending_col_widths), pending_y - 20)
+            
+            # Header text
+            c.setFont(font_name, 9)
+            curr_x = pending_start_x
+            for i, h in enumerate(pending_headers):
+                c.drawCentredString(curr_x + pending_col_widths[i]/2, pending_y - 14, h)
+                curr_x += pending_col_widths[i]
+                if i < len(pending_headers) - 1:
+                    c.line(curr_x, pending_y, curr_x, pending_y - 20)
+                    
+            pending_y -= 20
+            
+            # Rows
+            for r in pending_reports:
+                car = (r.get('car_number') or '').strip().upper() or '-'
+                desc = (r.get('description') or '').strip() or '-'
+                report_time = format_report_time(r.get('created_at'))
+                
+                car_wrapped = wrap_text(car, max_len=10)
+                desc_wrapped = wrap_text(desc, max_len=26)
+                time_wrapped = wrap_text(report_time, max_len=18)
+                
+                num_lines = max(len(car_wrapped), len(desc_wrapped), len(time_wrapped))
+                row_h = 10 + num_lines * 10
+                
+                # Check for overflow
+                if pending_y < 50 + row_h:
+                    c.showPage()
+                    c.setFont(font_name, 11)
+                    c.drawString(40, height - 40, "待處理清單 (續)")
+                    pending_y = height - 60
+                    
+                    # Draw header again
+                    c.setFillColorRGB(0.92, 0.94, 0.98)
+                    c.rect(pending_start_x, pending_y - 20, sum(pending_col_widths), 20, fill=True, stroke=False)
+                    c.setFillColorRGB(0, 0, 0)
+                    c.setStrokeColorRGB(0.7, 0.7, 0.7)
+                    c.setLineWidth(0.5)
+                    
+                    c.line(pending_start_x, pending_y, pending_start_x + sum(pending_col_widths), pending_y)
+                    c.line(pending_start_x, pending_y - 20, pending_start_x + sum(pending_col_widths), pending_y - 20)
+                    c.line(pending_start_x, pending_y, pending_start_x, pending_y - 20)
+                    c.line(pending_start_x + sum(pending_col_widths), pending_y, pending_start_x + sum(pending_col_widths), pending_y - 20)
+                    
+                    c.setFont(font_name, 9)
+                    curr_x = pending_start_x
+                    for i, h in enumerate(pending_headers):
+                        c.drawCentredString(curr_x + pending_col_widths[i]/2, pending_y - 14, h)
+                        curr_x += pending_col_widths[i]
+                        if i < len(pending_headers) - 1:
+                            c.line(curr_x, pending_y, curr_x, pending_y - 20)
+                    pending_y -= 20
+                
+                # Draw cell borders and content
+                c.line(pending_start_x, pending_y - row_h, pending_start_x + sum(pending_col_widths), pending_y - row_h)
+                c.line(pending_start_x, pending_y, pending_start_x, pending_y - row_h)
+                c.line(pending_start_x + sum(pending_col_widths), pending_y, pending_start_x + sum(pending_col_widths), pending_y - row_h)
+                
+                curr_x = pending_start_x
+                c.setFont(font_name, 8.5)
+                
+                # Col 1: Car
+                for idx, line in enumerate(car_wrapped):
+                    c.drawCentredString(curr_x + pending_col_widths[0]/2, pending_y - 14 - idx * 10, line)
+                curr_x += pending_col_widths[0]
+                c.line(curr_x, pending_y, curr_x, pending_y - row_h)
+                
+                # Col 2: Description
+                for idx, line in enumerate(desc_wrapped):
+                    c.drawCentredString(curr_x + pending_col_widths[1]/2, pending_y - 14 - idx * 10, line)
+                curr_x += pending_col_widths[1]
+                c.line(curr_x, pending_y, curr_x, pending_y - row_h)
+                
+                # Col 3: Report Time
+                for idx, line in enumerate(time_wrapped):
+                    c.drawCentredString(curr_x + pending_col_widths[2]/2, pending_y - 14 - idx * 10, line)
+                
+                pending_y -= row_h
+        else:
+            pending_y -= 10
+            c.setFont(font_name, 10)
+            c.setFillColorRGB(0.5, 0.5, 0.5)
+            c.drawCentredString(width/2, pending_y - 15, "目前無待處理案件")
+
         c.showPage()
         
         # 2. Setup Matplotlib Font
