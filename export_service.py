@@ -526,8 +526,13 @@ class ExportService:
         c.setFont(font_name, 24)
         c.drawCentredString(width/2, height/2 + 280, f"({target_month_num}月)市場組維修報表")
         
+        import pytz
+        taipei_tz = pytz.timezone('Asia/Taipei')
+        now_taipei = datetime.now(taipei_tz)
+        output_date_str = now_taipei.strftime('%Y-%m-%d %H:%M')
+        
         c.setFont(font_name, 12)
-        c.drawCentredString(width/2, height/2 + 230, f"產出日期：{datetime.now().strftime('%Y-%m-%d')}")
+        c.drawCentredString(width/2, height/2 + 230, f"產出日期：{output_date_str}")
         
         # Draw Cover Summary Table
         cover_y = height/2 + 170
@@ -614,7 +619,7 @@ class ExportService:
         # Position for pending list table - leave a larger gap
         pending_y = cover_y - 90
         c.setFont(font_name, 14)
-        c.drawString(40, pending_y, "待處理清單")
+        c.drawString(40, pending_y, "對應中清單")
         pending_y -= 18
         
         if pending_reports:
@@ -664,7 +669,7 @@ class ExportService:
                     c.showPage()
                     c._code.append("0.5 Tc")
                     c.setFont(font_name, 11)
-                    c.drawString(40, height - 40, "待處理清單 (續)")
+                    c.drawString(40, height - 40, "對應中清單 (續)")
                     pending_y = height - 60
                     
                     # Draw header again
