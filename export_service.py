@@ -1034,12 +1034,23 @@ class ExportService:
             vendor = r.get('vendor_name') or '未知客運'
             car = (r.get('car_number') or '').strip().upper() or '未知車號'
             desc = (r.get('description') or '').strip() or '無描述'
+            sol = (r.get('solution') or '').strip()
             comp = (r.get('component') or '').strip() or '未分類'
+            
+            # Show "同左" if solution content is identical to description
+            if not sol:
+                sol_display = "-"
+            elif sol == desc:
+                sol_display = "同左"
+            else:
+                sol_display = sol
+                
             r1_rows.append([
-                wrap_text(vendor, max_len=10),
-                wrap_text(car, max_len=12),
-                wrap_text(desc, max_len=26),
-                wrap_text(comp, max_len=8)
+                wrap_text(vendor, max_len=6),
+                wrap_text(car, max_len=8),
+                wrap_text(desc, max_len=18),
+                wrap_text(sol_display, max_len=15),
+                wrap_text(comp, max_len=6)
             ])
         
         y = height - 40
@@ -1050,10 +1061,11 @@ class ExportService:
         y = ExportService._draw_table_with_pagination(
             c, font_name, 
             "客運商 v.s. 品情項目對照表 (由多到少排序)", 
-            ["客運商", "車號", "品情項目 (問題描述)", "部件"], 
-            [100, 85, 250, 80], 
+            ["客運商", "車號", "品情項目 (問題描述)", "處理方案", "部件"], 
+            [60, 65, 180, 150, 60], 
             r1_rows, 
-            y, width, height
+            y, width, height,
+            font_size=8
         )
         
         # ----------------------------------------------------
