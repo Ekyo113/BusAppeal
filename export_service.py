@@ -54,6 +54,7 @@ class ExportService:
 
             y -= 0.8*cm
             c.drawString(2*cm, y, f"目前里程：{r.get('mileage', '-') or '-'} KM")
+            c.drawString(10*cm, y, f"部件：{r.get('component', '-') or '-'}")
             
             # 分隔線
             y -= 0.5*cm
@@ -169,7 +170,7 @@ class ExportService:
         return lines
 
     @staticmethod
-    def generate_excel(reports, content_field="solution"):
+    def generate_excel(reports, content_field="solution", include_status=False):
         """產生 Excel XLSX 檔案，若未安裝 openpyxl 則自動降級為帶有 UTF-8 BOM 的 CSV 檔案"""
         # 依日期由遠到近（建立/完成時間遞增）排序
         reports = sorted(reports, key=lambda r: r.get('completed_at') or r.get('created_at') or '')
@@ -195,8 +196,13 @@ class ExportService:
             )
             
             content_header = "內容(通報回覆)" if content_field == "reply" else "內容(處理方案)"
-            # Order: 客運商/問題描述/車號/處理人/完成日(年-月-日)/里程/類型/內容
-            headers = ["客運商", "問題描述", "車號", "處理人", "完成日(年-月-日)", "里程", "類型", content_header]
+            
+            if include_status:
+                # Order: 客運商/狀態/問題描述/車號/部件/處理人/完成日(年-月-日)/里程/類型/內容
+                headers = ["客運商", "狀態", "問題描述", "車號", "部件", "處理人", "完成日(年-月-日)", "里程", "類型", content_header]
+            else:
+                # Order: 客運商/問題描述/車號/部件/處理人/完成日(年-月-日)/里程/類型/內容
+                headers = ["客運商", "問題描述", "車號", "部件", "處理人", "完成日(年-月-日)", "里程", "類型", content_header]
             ws.append(headers)
             
             for col_idx in range(1, len(headers) + 1):
@@ -214,17 +220,34 @@ class ExportService:
                 content_val = r.get('reply') if content_field == 'reply' else r.get('solution')
                 if not content_val:
                     content_val = r.get('solution') or '-'
-                    
-                row_data = [
-                    r.get('vendor_name', '-'),
-                    r.get('description', '-'),
-                    r.get('car_number', '-'),
-                    r.get('handler_name', '-'),
-                    completed_at or '-',
-                    r.get('mileage', '-') or '-',
-                    r.get('solution_type', '-'),
-                    content_val
-                ]
+                
+                comp_val = r.get('component') or '-'
+                
+                if include_status:
+                    row_data = [
+                        r.get('vendor_name', '-'),
+                        r.get('status', '-'),
+                        r.get('description', '-'),
+                        r.get('car_number', '-'),
+                        comp_val,
+                        r.get('handler_name', '-'),
+                        completed_at or '-',
+                        r.get('mileage', '-') or '-',
+                        r.get('solution_type', '-'),
+                        content_val
+                    ]
+                else:
+                    row_data = [
+                        r.get('vendor_name', '-'),
+                        r.get('description', '-'),
+                        r.get('car_number', '-'),
+                        comp_val,
+                        r.get('handler_name', '-'),
+                        completed_at or '-',
+                        r.get('mileage', '-') or '-',
+                        r.get('solution_type', '-'),
+                        content_val
+                    ]
                 ws.append(row_data)
                 
             for row_idx in range(2, len(reports) + 2):
@@ -232,11 +255,19 @@ class ExportService:
                     cell = ws.cell(row=row_idx, column=col_idx)
                     cell.font = font_body
                     cell.border = thin_border
-                    # Align: 1,3,4,5,6,7 center; 2,8 left
-                    if col_idx in [1, 3, 4, 5, 6, 7]:
-                        cell.alignment = align_center
+                    
+                    if include_status:
+                        # 1:客運商(center), 2:狀態(center), 3:問題描述(left), 4:車號(center), 5:部件(center), 6:處理人(center), 7:完成日(center), 8:里程(center), 9:類型(center), 10:內容(left)
+                        if col_idx in [1, 2, 4, 5, 6, 7, 8, 9]:
+                            cell.alignment = align_center
+                        else:
+                            cell.alignment = align_left
                     else:
-                        cell.alignment = align_left
+                        # 1:客運商(center), 2:問題描述(left), 3:車號(center), 4:部件(center), 5:處理人(center), 6:完成日(center), 7:里程(center), 8:類型(center), 9:內容(left)
+                        if col_idx in [1, 3, 4, 5, 6, 7, 8]:
+                            cell.alignment = align_center
+                        else:
+                            cell.alignment = align_left
                         
             for col in ws.columns:
                 max_len = 0
@@ -264,7 +295,11 @@ class ExportService:
             writer = csv.writer(text_buffer)
             
             content_header = "內容(通報回覆)" if content_field == "reply" else "內容(處理方案)"
-            writer.writerow(["客運商", "問題描述", "車號", "處理人", "完成日(年-月-日)", "里程", "類型", content_header])
+            if include_status:
+                headers = ["客運商", "狀態", "問題描述", "車號", "部件", "處理人", "完成日(年-月-日)", "里程", "類型", content_header]
+            else:
+                headers = ["客運商", "問題描述", "車號", "部件", "處理人", "完成日(年-月-日)", "里程", "類型", content_header]
+            writer.writerow(headers)
             
             for r in reports:
                 completed_at = r.get('completed_at', '')
@@ -274,17 +309,33 @@ class ExportService:
                 content_val = r.get('reply') if content_field == 'reply' else r.get('solution')
                 if not content_val:
                     content_val = r.get('solution') or '-'
-                    
-                writer.writerow([
-                    r.get('vendor_name', '-'),
-                    r.get('description', '-'),
-                    r.get('car_number', '-'),
-                    r.get('handler_name', '-'),
-                    completed_at or '-',
-                    r.get('mileage', '-') or '-',
-                    r.get('solution_type', '-'),
-                    content_val
-                ])
+                comp_val = r.get('component') or '-'
+                
+                if include_status:
+                    writer.writerow([
+                        r.get('vendor_name', '-'),
+                        r.get('status', '-'),
+                        r.get('description', '-'),
+                        r.get('car_number', '-'),
+                        comp_val,
+                        r.get('handler_name', '-'),
+                        completed_at or '-',
+                        r.get('mileage', '-') or '-',
+                        r.get('solution_type', '-'),
+                        content_val
+                    ])
+                else:
+                    writer.writerow([
+                        r.get('vendor_name', '-'),
+                        r.get('description', '-'),
+                        r.get('car_number', '-'),
+                        comp_val,
+                        r.get('handler_name', '-'),
+                        completed_at or '-',
+                        r.get('mileage', '-') or '-',
+                        r.get('solution_type', '-'),
+                        content_val
+                    ])
                 
             buffer.write(text_buffer.getvalue().encode('utf-8'))
             buffer.seek(0)

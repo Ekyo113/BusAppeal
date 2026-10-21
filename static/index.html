@@ -96,7 +96,26 @@
                                 <input type="checkbox" id="filter-type-other" checked onchange="saveTypeFilterState(); renderReports();"> 未分類
                             </label>
                         </div>
-                        <button onclick="openExportModal()" class="btn-secondary">📥 導出 PDF 報表</button>
+                        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                            <button onclick="exportReportsFromTab('excel')" class="btn-secondary" style="background: #107c41; border-color: #107c41; color: white;">📊 導出 Excel (XLSX)</button>
+                            <button onclick="openExportModal()" class="btn-secondary">📥 導出報表...</button>
+                        </div>
+                    </div>
+                    <!-- 部件選項篩選區 -->
+                    <div class="list-component-filters">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                            <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+                                <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: bold;">部件選項：</span>
+                                <button type="button" onclick="selectAllComponents(true)" class="btn-component-action">全部選擇</button>
+                                <button type="button" onclick="selectAllComponents(false)" class="btn-component-action">全部取消</button>
+                            </div>
+                            <div style="font-size: 0.78rem; color: var(--text-muted);">
+                                已選 <span id="component-selected-count" style="color: var(--primary); font-weight: bold;">0</span> 個部件
+                            </div>
+                        </div>
+                        <div id="component-checkboxes-container">
+                            <!-- 由 JS 動態生成各部件核取方塊 -->
+                        </div>
                     </div>
                     <div class="table-container">
                         <table class="styled-table">
@@ -354,6 +373,7 @@
                                             </th>
                                             <th>狀態</th>
                                             <th>車號</th>
+                                            <th>部件</th>
                                             <th>類型</th>
                                             <th>處理方案</th>
                                             <th>目前里程</th>
@@ -523,35 +543,46 @@
     <!-- Export Modal -->
     <div id="export-modal" class="hidden">
         <div class="modal-overlay" onclick="closeExportModal()"></div>
-        <div class="modal-content" style="max-width: 450px;">
+        <div class="modal-content" style="max-width: 480px;">
             <button class="close-btn" onclick="closeExportModal()">&times;</button>
-            <h2 style="margin-bottom: 1.5rem;">📥 導出 PDF 報表</h2>
+            <h2 style="margin-bottom: 1.25rem;">📥 導出通報報表</h2>
             
-            <div class="detail-row">
-                <label>導出類型</label>
-                <select id="export-type" style="width:100%; padding: 0.8rem; border-radius: 8px; background: var(--surface-light); color: white; border: 1px solid var(--border);">
-                    <option value="replacement">換件紀錄 (預設 7 天)</option>
-                    <option value="report">通報紀錄 (預設 30 天)</option>
+            <div class="detail-row" style="margin-bottom: 1rem;">
+                <label>導出格式</label>
+                <select id="export-format" style="width:100%; padding: 0.8rem; border-radius: 8px; background: var(--surface-light); color: white; border: 1px solid var(--border);">
+                    <option value="excel">📊 Excel (.xlsx) 試算表</option>
+                    <option value="pdf">📄 PDF (.pdf) 文件</option>
                 </select>
             </div>
- 
-            <div class="detail-row" style="display: flex; gap: 1rem;">
-                <div style="flex: 1;">
-                    <label>開始日期</label>
-                    <input type="date" id="export-start" style="width:100%; padding: 0.8rem; border-radius: 8px; background: var(--surface-light); color: white; border: 1px solid var(--border);">
-                </div>
-                <div style="flex: 1;">
-                    <label>結束日期</label>
-                    <input type="date" id="export-end" style="width:100%; padding: 0.8rem; border-radius: 8px; background: var(--surface-light); color: white; border: 1px solid var(--border);">
+
+            <div class="detail-row" style="margin-bottom: 1rem;">
+                <label>導出內容欄位</label>
+                <div style="display: flex; gap: 1.5rem; padding: 0.5rem 0;">
+                    <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; color: var(--text); font-size: 0.9rem;">
+                        <input type="radio" name="export-reports-content-field" value="solution" checked> 處理方案
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; color: var(--text); font-size: 0.9rem;">
+                        <input type="radio" name="export-reports-content-field" value="reply"> 通報回覆
+                    </label>
                 </div>
             </div>
- 
+
+            <div class="detail-row" style="margin-bottom: 1.5rem; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; padding: 0.85rem;">
+                <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.35rem;">導出資料範圍：</div>
+                <div style="font-size: 0.95rem; font-weight: bold; color: var(--text);">
+                    📋 目前清單篩選結果（共 <span id="export-reports-filtered-count" style="color: var(--primary);">0</span> 筆）
+                </div>
+                <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.35rem; line-height: 1.4;">
+                    將依照當前清單設定之顯示類型、隱藏已完成及部件篩選條件導出所有資料。
+                </div>
+            </div>
+
             <div class="modal-actions">
-                <button onclick="doExport()" class="btn-primary" style="width: 100%;">確認導出並下載</button>
+                <button onclick="doExportFromModal()" class="btn-primary" style="width: 100%; padding: 0.85rem;">確認導出並下載</button>
             </div>
         </div>
     </div>
  
-    <script src="/static/app.js?v=1.3"></script>
+    <script src="/static/app.js?v=1.4"></script>
 </body>
 </html>

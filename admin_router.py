@@ -152,6 +152,7 @@ class CustomExportRequest(BaseModel):
     format: str
     content_field: str = "solution"
     export_type: str = "report"
+    include_status: bool = False
 
 @router.post("/export/custom")
 async def export_custom(req: CustomExportRequest, token: str = Header(None)):
@@ -167,7 +168,7 @@ async def export_custom(req: CustomExportRequest, token: str = Header(None)):
     from urllib.parse import quote
     
     if req.format == 'excel':
-        excel_buffer = ExportService.generate_excel(reports, req.content_field)
+        excel_buffer = ExportService.generate_excel(reports, req.content_field, req.include_status)
         filename = f"維修通報報表_{datetime.now().strftime('%Y%m%d%H%M')}.xlsx"
         encoded_filename = quote(filename)
         return StreamingResponse(
@@ -182,7 +183,7 @@ async def export_custom(req: CustomExportRequest, token: str = Header(None)):
         vendors = list(set([r.get('vendor_name') for r in reports if r.get('vendor_name')]))
         vendor_name = vendors[0] if vendors else "未定義客運"
         
-        months = list(set([r.get('completed_at')[:7] for r in reports if r.get('completed_at')]))
+        months = list(set([(r.get('completed_at') or r.get('created_at') or '')[:7] for r in reports if (r.get('completed_at') or r.get('created_at'))]))
         month_str = f"{months[0].replace('-', '年')}月" if months else "月份未定"
         
         filename = f"{vendor_name}_{month_str}.pdf"

@@ -306,8 +306,13 @@ class Database:
             return []
         client = cls.get_client()
         try:
-            res = client.table('reports').select('*').in_('id', ids).execute()
-            reports = res.data
+            reports = []
+            chunk_size = 50
+            for i in range(0, len(ids), chunk_size):
+                chunk = ids[i:i + chunk_size]
+                res = client.table('reports').select('*').in_('id', chunk).execute()
+                if res.data:
+                    reports.extend(res.data)
             
             reports_map = {r['id']: r for r in reports}
             sorted_reports = [reports_map[rid] for rid in ids if rid in reports_map]

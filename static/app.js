@@ -54,6 +54,7 @@ async function loadReports() {
         loginOverlay.classList.add('hidden');
         dashboardContent.classList.remove('hidden');
         
+        renderComponentFilters();
         renderReports();
         updateStats();
         populateDesignSelects();
@@ -90,32 +91,136 @@ function restoreTypeFilterState() {
     }
 }
 
-function renderReports() {
-    const list = document.getElementById('report-list');
-    list.innerHTML = '';
+const ALL_COMPONENTS = ["TMS", "動力", "BMS", "冷氣", "電子影像", "方向燈座及撥桿", "車門", "車裝", "車體外裝", "燈光", "底盤件", "儀錶", "其他", "未分類"];
+let selectedComponents = new Set(ALL_COMPONENTS);
 
+function getAvailableComponents() {
+    const list = [...ALL_COMPONENTS.filter(c => c !== '未分類')];
+    if (allReports && allReports.length > 0) {
+        allReports.forEach(r => {
+            const comp = (r.component || '').trim();
+            if (comp && !list.includes(comp) && comp !== '未分類') {
+                list.push(comp);
+            }
+        });
+    }
+    list.push('未分類');
+    return list;
+}
+
+function renderComponentFilters() {
+    const container = document.getElementById('component-checkboxes-container');
+    const countEl = document.getElementById('component-selected-count');
+    if (!container) return;
+
+    const comps = getAvailableComponents();
+    if (!window._componentFilterInitialized) {
+        // 預設為全部勾選
+        selectedComponents = new Set(comps);
+        window._componentFilterInitialized = true;
+    } else {
+        // 新增未曾出現過的部件預設勾選
+        comps.forEach(c => {
+            if (!ALL_COMPONENTS.includes(c) && !selectedComponents.has(c)) {
+                selectedComponents.add(c);
+            }
+        });
+    }
+
+    container.innerHTML = comps.map(comp => {
+        const isChecked = selectedComponents.has(comp);
+        return `
+            <label class="component-checkbox-label">
+                <input type="checkbox" value="${comp}" ${isChecked ? 'checked' : ''} onchange="onComponentFilterChange('${comp}', this.checked)">
+                ${comp}
+            </label>
+        `;
+    }).join('');
+
+    if (countEl) {
+        countEl.innerText = selectedComponents.size;
+    }
+}
+
+function selectAllComponents(selectAll) {
+    const comps = getAvailableComponents();
+    if (selectAll) {
+        selectedComponents = new Set(comps);
+    } else {
+        selectedComponents.clear();
+    }
+
+    const container = document.getElementById('component-checkboxes-container');
+    if (container) {
+        const checkboxes = container.querySelectorAll('input[type="checkbox"]');
+        checkboxes.forEach(cb => {
+            cb.checked = selectAll;
+        });
+    }
+
+    const countEl = document.getElementById('component-selected-count');
+    if (countEl) {
+        countEl.innerText = selectedComponents.size;
+    }
+
+    renderReports();
+}
+
+function onComponentFilterChange(comp, isChecked) {
+    if (isChecked) {
+        selectedComponents.add(comp);
+    } else {
+        selectedComponents.delete(comp);
+    }
+
+    const countEl = document.getElementById('component-selected-count');
+    if (countEl) {
+        countEl.innerText = selectedComponents.size;
+    }
+
+    renderReports();
+}
+
+function getFilteredReports() {
     const showReplace = document.getElementById('filter-type-replace') ? document.getElementById('filter-type-replace').checked : true;
     const showRepair = document.getElementById('filter-type-repair') ? document.getElementById('filter-type-repair').checked : true;
     const showDesign = document.getElementById('filter-type-design') ? document.getElementById('filter-type-design').checked : true;
     const showAfterSales = document.getElementById('filter-type-aftersales') ? document.getElementById('filter-type-aftersales').checked : true;
     const showOther = document.getElementById('filter-type-other') ? document.getElementById('filter-type-other').checked : true;
 
-    const filteredReports = allReports.filter(r => {
+    return allReports.filter(r => {
         // Status filter
         if (hideDone && r.status === '已完成') return false;
         
         // Type filter
         const type = r.solution_type;
-        if (type === '更換') return showReplace;
-        if (type === '維修') return showRepair;
-        if (type === '設計修改') return showDesign;
-        if (type === '售服') return showAfterSales;
-        if (!type || type.trim() === '') return showOther;
+        if (type === '更換' && !showReplace) return false;
+        if (type === '維修' && !showRepair) return false;
+        if (type === '設計修改' && !showDesign) return false;
+        if (type === '售服' && !showAfterSales) return false;
+        if ((!type || type.trim() === '') && !showOther) return false;
+
+        // Component filter
+        let comp = (r.component || '').trim();
+        if (!comp || comp === '') {
+            comp = '未分類';
+        }
+        if (!selectedComponents.has(comp)) {
+            return false;
+        }
+
         return true;
     });
+}
+
+function renderReports() {
+    const list = document.getElementById('report-list');
+    list.innerHTML = '';
+
+    const filteredReports = getFilteredReports();
 
     if (filteredReports.length === 0) {
-        list.innerHTML = '<tr><td colspan="12" class="loading-state">目前無符合條件的通報記錄。</td></tr>';
+        list.innerHTML = '<tr><td colspan="13" class="loading-state">目前無符合條件的通報記錄。</td></tr>';
         return;
     }
 
@@ -688,87 +793,58 @@ function renderGPSChart(logs, dateStr) {
     gpsChart.render();
 }
 
-// --- 導出報表功能 ---
+// --- 通報管理導出報表功能 ---
 function openExportModal() {
     const modal = document.getElementById('export-modal');
+    if (!modal) return;
+    
+    const filteredReports = getFilteredReports();
+    const countEl = document.getElementById('export-reports-filtered-count');
+    if (countEl) {
+        countEl.innerText = filteredReports.length;
+    }
+
     modal.classList.remove('hidden');
-    
-    const typeSelect = document.getElementById('export-type');
-    const startInput = document.getElementById('export-start');
-    const endInput = document.getElementById('export-end');
-
-    const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
-    
-    // 監聽類型切換，自動調整日期範圍
-    typeSelect.onchange = () => {
-        const days = typeSelect.value === 'replacement' ? 7 : 30;
-        const startDate = new Date();
-        startDate.setDate(today.getDate() - days);
-        startInput.value = startDate.toISOString().split('T')[0];
-        endInput.value = todayStr;
-    };
-
-    // 初始預設值
-    typeSelect.onchange();
 }
 
 function closeExportModal() {
-    document.getElementById('export-modal').classList.add('hidden');
+    const modal = document.getElementById('export-modal');
+    if (modal) modal.classList.add('hidden');
 }
 
-async function doExport() {
-    const type = document.getElementById('export-type').value;
-    const start = document.getElementById('export-start').value;
-    const end = document.getElementById('export-end').value;
+async function exportReportsFromTab(format = 'excel') {
+    const filteredReports = getFilteredReports();
+    if (filteredReports.length === 0) {
+        showToast("目前篩選條件下無符合的通報資料可導出", "error");
+        return;
+    }
+
+    if (format === 'excel') {
+        await doExportReports('excel', 'solution');
+    } else {
+        openExportModal();
+    }
+}
+
+async function doExportFromModal() {
+    const format = document.getElementById('export-format')?.value || 'excel';
+    const contentFieldRadio = document.querySelector('input[name="export-reports-content-field"]:checked');
+    const contentField = contentFieldRadio ? contentFieldRadio.value : 'solution';
+
+    await doExportReports(format, contentField);
+}
+
+async function doExportReports(format, contentField = 'solution') {
     const token = document.getElementById('admin-token').value;
+    const filteredReports = getFilteredReports();
 
-    if (!start || !end) {
-        showToast("請選擇日期範圍", "error");
+    if (filteredReports.length === 0) {
+        showToast("目前篩選條件下無符合的通報資料可導出", "error");
         return;
     }
 
-    // Filter reports from allReports matching dates and status '已完成'
-    const targetReports = allReports.filter(r => {
-        if (r.status !== '已完成') return false;
-        if (!r.completed_at) return false;
-        const completedDate = r.completed_at.slice(0, 10);
-        if (completedDate < start || completedDate > end) return false;
-        if (type === 'replacement') {
-            return r.solution_type === '更換';
-        }
-        return true;
-    });
-
-    if (targetReports.length === 0) {
-        showToast("該日期範圍內無已完成紀錄", "error");
-        return;
-    }
-
-    showToast("報表產生中，請稍候...", "success");
-
-    // Group by vendor and month
-    const groups = {};
-    targetReports.forEach(r => {
-        let vendor = '未知客運';
-        const car = (r.car_number || '').trim();
-        if (monitoredBuses && monitoredBuses.length > 0) {
-            const found = monitoredBuses.find(b => (b.plate_number || '').trim() === car);
-            if (found) {
-                vendor = found.vendor_name || '未知客運';
-            }
-        }
-        r.vendor_name = vendor;
-        const month = r.completed_at ? r.completed_at.slice(0, 7) : '無日期';
-        const key = `${vendor}_${month}`;
-        if (!groups[key]) {
-            groups[key] = { vendor, month, ids: [] };
-        }
-        groups[key].ids.push(r.id);
-    });
-
-    let successCount = 0;
-    for (const group of Object.values(groups)) {
+    if (format === 'excel') {
+        showToast("Excel 報表產生中，請稍候...", "info");
         try {
             const response = await fetch('/admin/export/custom', {
                 method: 'POST',
@@ -777,39 +853,124 @@ async function doExport() {
                     'token': token
                 },
                 body: JSON.stringify({
-                    ids: group.ids,
-                    format: 'pdf',
-                    export_type: type,
-                    content_field: 'solution'
+                    ids: filteredReports.map(r => r.id),
+                    format: 'excel',
+                    content_field: contentField,
+                    include_status: true
                 })
             });
 
             if (!response.ok) {
                 const err = await response.json();
-                throw new Error(err.detail || `匯出 ${group.vendor} PDF 失敗`);
+                throw new Error(err.detail || "導出 Excel 失敗");
             }
 
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `${group.vendor}_${group.month.replace('-', '年')}月.pdf`;
+            
+            const contentDisposition = response.headers.get('Content-Disposition');
+            let filename = `通報管理報表_${new Date().toISOString().slice(0, 10)}.xlsx`;
+            if (contentDisposition) {
+                const matches = /filename\*=UTF-8''([^;]+)/.exec(contentDisposition);
+                if (matches && matches[1]) {
+                    filename = decodeURIComponent(matches[1]);
+                }
+            }
+            
+            a.download = filename;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             window.URL.revokeObjectURL(url);
-            successCount++;
+            showToast("Excel 導出成功！", "success");
+            closeExportModal();
         } catch (e) {
-            console.error("Export Group Error:", e);
+            console.error("Export Excel Error:", e);
             showToast(e.message, "error");
         }
-    }
+    } else {
+        // PDF format
+        showToast("PDF 報表產生中，請稍候...", "info");
 
-    if (successCount > 0) {
-        showToast(`成功匯出 ${successCount} 個 PDF 檔案！`, "success");
-        closeExportModal();
+        // Group by vendor and month
+        const groups = {};
+        filteredReports.forEach(r => {
+            let vendor = '未知客運';
+            const car = (r.car_number || '').trim();
+            if (monitoredBuses && monitoredBuses.length > 0) {
+                const found = monitoredBuses.find(b => (b.plate_number || '').trim() === car);
+                if (found) {
+                    vendor = found.vendor_name || '未知客運';
+                }
+            }
+            r.vendor_name = vendor;
+            const dateStr = r.completed_at || r.created_at || '';
+            const month = dateStr ? dateStr.slice(0, 7) : '無月份';
+            const key = `${vendor}_${month}`;
+            if (!groups[key]) {
+                groups[key] = { vendor, month, ids: [] };
+            }
+            groups[key].ids.push(r.id);
+        });
+
+        let successCount = 0;
+        for (const group of Object.values(groups)) {
+            try {
+                const response = await fetch('/admin/export/custom', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'token': token
+                    },
+                    body: JSON.stringify({
+                        ids: group.ids,
+                        format: 'pdf',
+                        export_type: 'report',
+                        content_field: contentField
+                    })
+                });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.detail || `匯出 ${group.vendor} PDF 失敗`);
+                }
+
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                
+                const contentDisposition = response.headers.get('Content-Disposition');
+                let filename = `${group.vendor}_${group.month.replace('-', '年')}月.pdf`;
+                if (contentDisposition) {
+                    const matches = /filename\*=UTF-8''([^;]+)/.exec(contentDisposition);
+                    if (matches && matches[1]) {
+                        filename = decodeURIComponent(matches[1]);
+                    }
+                }
+
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                successCount++;
+            } catch (e) {
+                console.error("Export PDF Group Error:", e);
+                showToast(e.message, "error");
+            }
+        }
+
+        if (successCount > 0) {
+            showToast(`成功匯出 ${successCount} 個 PDF 檔案！`, "success");
+            closeExportModal();
+        }
     }
 }
+
+const doExport = doExportFromModal;
 
 // --- Operating Plans Logic ---
 
@@ -1670,7 +1831,7 @@ function renderExportTable() {
     listBody.innerHTML = '';
     
     if (displayReports.length === 0) {
-        listBody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2rem;">所選日期區間與類型查無已完成通報紀錄</td></tr>';
+        listBody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: var(--text-muted); padding: 2rem;">所選日期區間與類型查無已完成通報紀錄</td></tr>';
         selectedCountEl.innerText = '0';
         return;
     }
@@ -1696,6 +1857,7 @@ function renderExportTable() {
             </td>
             <td><span class="status-label done">已完成</span></td>
             <td style="font-weight: 600; color: var(--primary);">${r.car_number}</td>
+            <td>${r.component || '-'}</td>
             <td><span class="sol-type-label ${solTypeClass}">${r.solution_type || '-'}</span></td>
             <td>${r.solution || '-'}</td>
             <td>${r.mileage || '-'} KM</td>
